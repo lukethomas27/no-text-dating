@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { v4 as uuidv4 } from 'uuid';
+import * as Crypto from 'expo-crypto';
 import {
   LocalDatabase,
   UserProfile,
@@ -101,7 +101,7 @@ export const createProfile = async (
 ): Promise<UserProfile> => {
   const newProfile: UserProfile = {
     ...profile,
-    id: uuidv4(),
+    id: Crypto.randomUUID(),
     createdAt: new Date().toISOString(),
   };
   db.profiles.push(newProfile);
@@ -202,7 +202,7 @@ export const createMatch = async (
   userBId: string
 ): Promise<Match> => {
   const match: Match = {
-    id: uuidv4(),
+    id: Crypto.randomUUID(),
     userAId,
     userBId,
     state: 'active',
@@ -240,7 +240,7 @@ export const getCallThreadById = (threadId: string): CallThread | undefined => {
 
 export const createCallThread = async (matchId: string): Promise<CallThread> => {
   const thread: CallThread = {
-    id: uuidv4(),
+    id: Crypto.randomUUID(),
     matchId,
     schedulingState: 'pending',
     lastActivityAt: new Date().toISOString(),
@@ -282,7 +282,7 @@ export const createProposal = async (
   slots: string[]
 ): Promise<CallProposal> => {
   const proposal: CallProposal = {
-    id: uuidv4(),
+    id: Crypto.randomUUID(),
     threadId,
     proposedBy,
     callType,
@@ -314,13 +314,13 @@ export const createCallEvent = async (
   durationSeconds: number = 900 // 15 minutes default
 ): Promise<CallEvent> => {
   const event: CallEvent = {
-    id: uuidv4(),
+    id: Crypto.randomUUID(),
     threadId,
     scheduledStartISO,
     durationSeconds,
     callType,
     state: 'scheduled',
-    providerJoinUrl: `mock://call/${uuidv4()}`,
+    providerJoinUrl: `mock://call/${Crypto.randomUUID()}`,
   };
   db.callEvents.push(event);
   await updateCallThreadState(threadId, 'confirmed');
@@ -347,7 +347,7 @@ export const createFeedback = async (
   rating: 'interested' | 'not_interested'
 ): Promise<Feedback> => {
   const feedback: Feedback = {
-    id: uuidv4(),
+    id: Crypto.randomUUID(),
     callEventId,
     userId,
     rating,
