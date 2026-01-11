@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,27 +8,52 @@ import {
   TextInput,
   Alert,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SchedulingService, MatchingService, SafetyService } from '../../src/services';
 import { useAppStore } from '../../src/store';
 import { colors, spacing, borderRadius, typography } from '../../src/constants/theme';
+import { CallEvent, UserProfile } from '../../src/types';
 
 type ReportCategory = 'inappropriate' | 'fake' | 'harassment' | 'spam' | 'other';
 
 export default function FeedbackScreen() {
   const { callEventId } = useLocalSearchParams<{ callEventId: string }>();
   const { blockUser, refreshMatches, refreshCandidates } = useAppStore();
-  
-  const callEvent = SchedulingService.getCallEvent(callEventId);
-  const thread = callEvent ? SchedulingService.getThread(callEvent.threadId) : null;
-  const match = thread ? MatchingService.getMatch(thread.matchId) : null;
-  const otherUser = match ? MatchingService.getOtherUser(match) : null;
+
+  const [callEvent, setCallEvent] = useState<CallEvent | undefined>();
+  const [otherUser, setOtherUser] = useState<UserProfile | undefined>();
+  const [isLoading, setIsLoading] = useState(true);
 
   const [showReport, setShowReport] = useState(false);
   const [reportCategory, setReportCategory] = useState<ReportCategory | null>(null);
   const [reportNotes, setReportNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!callEventId) return;
+
+      const eventData = await SchedulingService.getCallEvent(callEventId);
+      setCallEvent(eventData);
+
+      if (eventData) {
+        const threadData = await SchedulingService.getThread(eventData.threadId);
+        if (threadData) {
+          const matchData = await MatchingService.getMatch(threadData.matchId);
+          if (matchData) {
+            const other = await MatchingService.getOtherUser(matchData);
+            setOtherUser(other);
+          }
+        }
+      }
+
+      setIsLoading(false);
+    };
+
+    loadData();
+  }, [callEventId]);
 
   const handleFeedback = async (rating: 'interested' | 'not_interested') => {
     if (!callEvent) return;
@@ -92,6 +117,14 @@ export default function FeedbackScreen() {
     }
     setIsSubmitting(false);
   };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
 
   if (!callEvent || !otherUser) {
     return (
@@ -235,6 +268,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     flex: 1,

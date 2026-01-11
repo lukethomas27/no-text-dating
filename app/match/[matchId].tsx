@@ -7,41 +7,72 @@ import {
   TouchableOpacity,
   Dimensions,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MatchingService } from '../../src/services';
 import { useAppStore } from '../../src/store';
 import { colors, spacing, borderRadius, typography } from '../../src/constants/theme';
+import { Match, UserProfile, CallThread } from '../../src/types';
 
 const { width } = Dimensions.get('window');
 
 export default function MatchScreen() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
   const { currentUser } = useAppStore();
-  
-  const match = MatchingService.getMatch(matchId);
-  const otherUser = match ? MatchingService.getOtherUser(match) : undefined;
-  const thread = match ? MatchingService.getThread(match.id) : undefined;
+
+  const [match, setMatch] = useState<Match | undefined>();
+  const [otherUser, setOtherUser] = useState<UserProfile | undefined>();
+  const [thread, setThread] = useState<CallThread | undefined>();
+  const [isLoading, setIsLoading] = useState(true);
 
   const [scaleAnim] = useState(new Animated.Value(0));
   const [fadeAnim] = useState(new Animated.Value(0));
 
   useEffect(() => {
-    // Entrance animation
-    Animated.sequence([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+    const loadData = async () => {
+      if (!matchId) return;
+
+      const matchData = await MatchingService.getMatch(matchId);
+      setMatch(matchData);
+
+      if (matchData) {
+        const [other, threadData] = await Promise.all([
+          MatchingService.getOtherUser(matchData),
+          MatchingService.getThread(matchData.id),
+        ]);
+        setOtherUser(other);
+        setThread(threadData);
+      }
+
+      setIsLoading(false);
+
+      // Start entrance animation after data loads
+      Animated.sequence([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 50,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    };
+
+    loadData();
+  }, [matchId]);
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   if (!match || !otherUser || !thread) {
     return (
@@ -77,7 +108,7 @@ export default function MatchScreen() {
         ]}
       >
         <Text style={styles.matchTitle}>It's a Match!</Text>
-        
+
         {/* Profile Photos */}
         <View style={styles.photosContainer}>
           <View style={styles.photoWrapper}>
@@ -100,7 +131,7 @@ export default function MatchScreen() {
         <Text style={styles.matchSubtitle}>
           You and {otherUser.name} liked each other!
         </Text>
-        
+
         <Text style={styles.noTextMessage}>
           Skip the texting — let's get you talking!
         </Text>
@@ -109,9 +140,9 @@ export default function MatchScreen() {
       {/* Action Button */}
       <Animated.View style={[styles.actionContainer, { opacity: fadeAnim }]}>
         <TouchableOpacity style={styles.scheduleButton} onPress={handleScheduleCall}>
-          <Text style={styles.scheduleButtonText}>Schedule a Call 📞</Text>
+          <Text style={styles.scheduleButtonText}>Schedule a Call</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity
           style={styles.laterButton}
           onPress={() => router.replace('/discovery')}

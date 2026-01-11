@@ -5,117 +5,166 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
   SafeAreaView,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAppStore } from '../src/store';
-import { ProfilesService } from '../src/services';
 import { colors, spacing, borderRadius, typography } from '../src/constants/theme';
 
 export default function AuthScreen() {
-  const { loginAs, createAndLogin } = useAppStore();
-  const [mode, setMode] = useState<'select' | 'create'>('select');
+  const { signIn, signUp, isLoading } = useAppStore();
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
+  const [error, setError] = useState('');
 
-  const demoProfiles = ProfilesService.getAllProfiles();
+  const handleSignIn = async () => {
+    if (!email.trim() || !password.trim()) {
+      setError('Please enter email and password');
+      return;
+    }
 
-  const handleSelectUser = async (userId: string) => {
-    await loginAs(userId);
-    router.replace('/discovery');
+    try {
+      setError('');
+      await signIn(email.trim(), password);
+      router.replace('/discovery');
+    } catch (err: any) {
+      setError(err.message || 'Failed to sign in');
+    }
   };
 
-  const handleCreateUser = async () => {
-    if (!name.trim() || !age.trim()) return;
+  const handleSignUp = async () => {
+    if (!email.trim() || !password.trim() || !name.trim() || !age.trim()) {
+      setError('Please fill in all fields');
+      return;
+    }
+
     const ageNum = parseInt(age, 10);
-    if (isNaN(ageNum) || ageNum < 18 || ageNum > 120) return;
-    
-    await createAndLogin(name.trim(), ageNum);
-    router.replace('/profile/edit');
+    if (isNaN(ageNum) || ageNum < 18 || ageNum > 120) {
+      setError('Please enter a valid age (18+)');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    try {
+      setError('');
+      await signUp(email.trim(), password, name.trim(), ageNum);
+      router.replace('/profile/edit');
+    } catch (err: any) {
+      setError(err.message || 'Failed to create account');
+    }
+  };
+
+  const switchMode = () => {
+    setMode(mode === 'signin' ? 'signup' : 'signin');
+    setError('');
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>No Text Dating</Text>
-        <Text style={styles.subtitle}>Skip the chat. Start talking.</Text>
-      </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
+            <Text style={styles.title}>No Text Dating</Text>
+            <Text style={styles.subtitle}>Skip the chat. Start talking.</Text>
+          </View>
 
-      {mode === 'select' ? (
-        <>
-          <Text style={styles.sectionTitle}>Choose a Demo Profile</Text>
-          <ScrollView style={styles.profileList} showsVerticalScrollIndicator={false}>
-            {demoProfiles.map((profile) => (
-              <TouchableOpacity
-                key={profile.id}
-                style={styles.profileItem}
-                onPress={() => handleSelectUser(profile.id)}
-              >
-                <View style={styles.profileAvatar}>
-                  <Text style={styles.avatarText}>
-                    {profile.name.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.profileInfo}>
-                  <Text style={styles.profileName}>{profile.name}, {profile.age}</Text>
-                  <Text style={styles.profileBio} numberOfLines={1}>
-                    {profile.bio || profile.prompts[0]}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <View style={styles.form}>
+            <Text style={styles.sectionTitle}>
+              {mode === 'signin' ? 'Welcome Back' : 'Create Account'}
+            </Text>
 
-          <TouchableOpacity
-            style={styles.switchButton}
-            onPress={() => setMode('create')}
-          >
-            <Text style={styles.switchButtonText}>Or create your own profile</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        <View style={styles.createForm}>
-          <Text style={styles.sectionTitle}>Create Your Profile</Text>
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Your name"
-            placeholderTextColor={colors.textMuted}
-            value={name}
-            onChangeText={setName}
-            autoCapitalize="words"
-          />
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Your age (18+)"
-            placeholderTextColor={colors.textMuted}
-            value={age}
-            onChangeText={setAge}
-            keyboardType="number-pad"
-            maxLength={3}
-          />
-          
-          <TouchableOpacity
-            style={[
-              styles.createButton,
-              (!name.trim() || !age.trim()) && styles.createButtonDisabled,
-            ]}
-            onPress={handleCreateUser}
-            disabled={!name.trim() || !age.trim()}
-          >
-            <Text style={styles.createButtonText}>Get Started</Text>
-          </TouchableOpacity>
+            {error ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
 
-          <TouchableOpacity
-            style={styles.switchButton}
-            onPress={() => setMode('select')}
-          >
-            <Text style={styles.switchButtonText}>Back to demo profiles</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={colors.textMuted}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor={colors.textMuted}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+            />
+
+            {mode === 'signup' && (
+              <>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Your name"
+                  placeholderTextColor={colors.textMuted}
+                  value={name}
+                  onChangeText={setName}
+                  autoCapitalize="words"
+                />
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Your age (18+)"
+                  placeholderTextColor={colors.textMuted}
+                  value={age}
+                  onChangeText={setAge}
+                  keyboardType="number-pad"
+                  maxLength={3}
+                />
+              </>
+            )}
+
+            <TouchableOpacity
+              style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
+              onPress={mode === 'signin' ? handleSignIn : handleSignUp}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color={colors.text} />
+              ) : (
+                <Text style={styles.submitButtonText}>
+                  {mode === 'signin' ? 'Sign In' : 'Create Account'}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.switchButton} onPress={switchMode}>
+              <Text style={styles.switchButtonText}>
+                {mode === 'signin'
+                  ? "Don't have an account? Sign Up"
+                  : 'Already have an account? Sign In'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -124,6 +173,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     padding: spacing.lg,
   },
   header: {
@@ -141,61 +196,26 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.lg,
     color: colors.textSecondary,
   },
-  sectionTitle: {
-    fontSize: typography.sizes.lg,
-    fontWeight: typography.weights.semibold,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  profileList: {
+  form: {
     flex: 1,
   },
-  profileItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
+  sectionTitle: {
+    fontSize: typography.sizes.xl,
+    fontWeight: typography.weights.semibold,
+    color: colors.text,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+  },
+  errorContainer: {
+    backgroundColor: colors.error + '20',
     borderRadius: borderRadius.md,
     padding: spacing.md,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
-  profileAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  avatarText: {
-    fontSize: typography.sizes.xl,
-    fontWeight: typography.weights.bold,
-    color: colors.text,
-  },
-  profileInfo: {
-    flex: 1,
-  },
-  profileName: {
-    fontSize: typography.sizes.md,
-    fontWeight: typography.weights.semibold,
-    color: colors.text,
-  },
-  profileBio: {
+  errorText: {
+    color: colors.error,
     fontSize: typography.sizes.sm,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  switchButton: {
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-  },
-  switchButtonText: {
-    fontSize: typography.sizes.md,
-    color: colors.secondary,
-    fontWeight: typography.weights.medium,
-  },
-  createForm: {
-    flex: 1,
+    textAlign: 'center',
   },
   input: {
     backgroundColor: colors.surface,
@@ -205,19 +225,28 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.md,
   },
-  createButton: {
+  submitButton: {
     backgroundColor: colors.primary,
     borderRadius: borderRadius.md,
     padding: spacing.md,
     alignItems: 'center',
     marginTop: spacing.md,
   },
-  createButtonDisabled: {
+  submitButtonDisabled: {
     backgroundColor: colors.surfaceLight,
   },
-  createButtonText: {
+  submitButtonText: {
     fontSize: typography.sizes.md,
     fontWeight: typography.weights.semibold,
     color: colors.text,
+  },
+  switchButton: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+  },
+  switchButtonText: {
+    fontSize: typography.sizes.md,
+    color: colors.secondary,
+    fontWeight: typography.weights.medium,
   },
 });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,14 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { addMinutes, addHours, format, setHours, setMinutes, startOfDay } from 'date-fns';
-import { SchedulingService, MatchingService } from '../../src/services';
+import { SchedulingService } from '../../src/services';
 import { useAppStore } from '../../src/store';
 import { colors, spacing, borderRadius, typography } from '../../src/constants/theme';
+import { CallThread, CallProposal, CallEvent } from '../../src/types';
 
 type CallType = 'audio' | 'video';
 type SlotOption = { label: string; getDate: () => Date };
@@ -28,14 +30,42 @@ const SLOT_OPTIONS: SlotOption[] = [
 export default function ScheduleScreen() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>();
   const { session } = useAppStore();
-  
-  const thread = SchedulingService.getThread(threadId);
-  const latestProposal = thread ? SchedulingService.getLatestProposal(threadId) : null;
-  const upcomingCall = thread ? SchedulingService.getUpcomingCall(threadId) : null;
-  
+
+  const [thread, setThread] = useState<CallThread | undefined>();
+  const [latestProposal, setLatestProposal] = useState<CallProposal | undefined>();
+  const [upcomingCall, setUpcomingCall] = useState<CallEvent | undefined>();
+  const [isLoading, setIsLoading] = useState(true);
+
   const [callType, setCallType] = useState<CallType>('video');
   const [selectedSlots, setSelectedSlots] = useState<number[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!threadId) return;
+
+      const [threadData, proposalData, callData] = await Promise.all([
+        SchedulingService.getThread(threadId),
+        SchedulingService.getLatestProposal(threadId),
+        SchedulingService.getUpcomingCall(threadId),
+      ]);
+
+      setThread(threadData);
+      setLatestProposal(proposalData);
+      setUpcomingCall(callData);
+      setIsLoading(false);
+    };
+
+    loadData();
+  }, [threadId]);
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   // If there's already an upcoming call, redirect to lobby
   if (upcomingCall) {
@@ -76,8 +106,7 @@ export default function ScheduleScreen() {
                 onPress={async () => {
                   setIsSubmitting(true);
                   try {
-                    // Confirm this slot - create a call event
-                    const event = await SchedulingService.confirmSlot(threadId, slot);
+                    const event = await SchedulingService.confirmSlot(threadId!, slot);
                     router.replace(`/call/lobby/${event.id}`);
                   } catch (error) {
                     Alert.alert('Error', 'Failed to confirm slot');
@@ -109,7 +138,7 @@ export default function ScheduleScreen() {
           <Text style={styles.slotsLabel}>Your proposed times:</Text>
           {latestProposal.slots.map((slot, index) => (
             <Text key={index} style={styles.proposedSlot}>
-              • {format(new Date(slot), "EEEE, MMM d 'at' h:mm a")}
+              {format(new Date(slot), "EEEE, MMM d 'at' h:mm a")}
             </Text>
           ))}
           <TouchableOpacity
@@ -140,9 +169,10 @@ export default function ScheduleScreen() {
     setIsSubmitting(true);
     try {
       const slots = selectedSlots.map((i) => SLOT_OPTIONS[i].getDate().toISOString());
-      await SchedulingService.createProposal(threadId, callType, slots);
-      // Refresh to show waiting state
-      router.replace(`/schedule/${threadId}`);
+      await SchedulingService.createProposal(threadId!, callType, slots);
+      // Reload data to show waiting state
+      const proposalData = await SchedulingService.getLatestProposal(threadId!);
+      setLatestProposal(proposalData);
     } catch (error) {
       Alert.alert('Error', 'Failed to create proposal');
     }
@@ -247,6 +277,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     padding: spacing.lg,

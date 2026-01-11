@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,20 +7,41 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { ProfilesService } from '../../src/services';
 import { colors, spacing, borderRadius, typography } from '../../src/constants/theme';
+import { UserProfile } from '../../src/types';
 
 const { width } = Dimensions.get('window');
 
 export default function ProfileDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const profile = ProfilesService.getProfile(id);
+  const [profile, setProfile] = useState<UserProfile | undefined>();
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (!id) return;
+      const data = await ProfilesService.getProfile(id);
+      setProfile(data);
+      setIsLoading(false);
+    };
+    loadProfile();
+  }, [id]);
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   if (!profile) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, styles.centered]}>
         <Text style={styles.errorText}>Profile not found</Text>
       </View>
     );
@@ -60,7 +82,7 @@ export default function ProfileDetailScreen() {
       {/* Profile Info */}
       <View style={styles.content}>
         <Text style={styles.name}>{profile.name}, {profile.age}</Text>
-        
+
         {profile.bio && (
           <Text style={styles.bio}>{profile.bio}</Text>
         )}
@@ -90,6 +112,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   photoGallery: {
     height: width * 1.2,

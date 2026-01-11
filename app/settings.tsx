@@ -1,11 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Switch,
   Alert,
   Image,
 } from 'react-native';
@@ -13,63 +12,59 @@ import { router } from 'expo-router';
 import { useAppStore } from '../src/store';
 import { MatchingService, SchedulingService } from '../src/services';
 import { colors, spacing, borderRadius, typography } from '../src/constants/theme';
+import { UserProfile, CallThread, CallEvent } from '../src/types';
+
+interface MatchWithDetails {
+  matchId: string;
+  otherUser: UserProfile | undefined;
+  thread: CallThread | undefined;
+  upcomingCall: CallEvent | undefined;
+}
 
 export default function SettingsScreen() {
-  const {
-    currentUser,
-    matches,
-    logout,
-    resetAllData,
-    reseedProfiles,
-    toggleAutoMatch,
-    autoMatchNextLike,
-    getOtherUser,
-  } = useAppStore();
+  const { currentUser, matches, signOut, getOtherUser } = useAppStore();
+  const [matchDetails, setMatchDetails] = useState<MatchWithDetails[]>([]);
 
-  const [isResetting, setIsResetting] = useState(false);
+  // Load match details asynchronously
+  useEffect(() => {
+    const loadMatchDetails = async () => {
+      const details = await Promise.all(
+        matches.map(async (match) => {
+          const otherUser = await getOtherUser(match);
+          const thread = await MatchingService.getThread(match.id);
+          const upcomingCall = thread
+            ? await SchedulingService.getUpcomingCall(thread.id)
+            : undefined;
+          return {
+            matchId: match.id,
+            otherUser,
+            thread,
+            upcomingCall,
+          };
+        })
+      );
+      setMatchDetails(details);
+    };
+    loadMatchDetails();
+  }, [matches]);
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Logout',
+        text: 'Sign Out',
         onPress: async () => {
-          await logout();
+          await signOut();
           router.replace('/auth');
         },
       },
     ]);
   };
 
-  const handleResetData = () => {
-    Alert.alert(
-      'Reset All Data',
-      'This will delete all matches, swipes, and calls. Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            setIsResetting(true);
-            await resetAllData();
-            setIsResetting(false);
-            router.replace('/auth');
-          },
-        },
-      ]
-    );
-  };
-
-  const handleReseed = async () => {
-    await reseedProfiles();
-    Alert.alert('Done', 'Demo profiles have been reseeded!');
-  };
-
-  const navigateToThread = (matchId: string) => {
-    const thread = MatchingService.getThread(matchId);
+  const navigateToThread = async (matchId: string) => {
+    const thread = await MatchingService.getThread(matchId);
     if (thread) {
-      const upcomingCall = SchedulingService.getUpcomingCall(thread.id);
+      const upcomingCall = await SchedulingService.getUpcomingCall(thread.id);
       if (upcomingCall) {
         router.push(`/call/lobby/${upcomingCall.id}`);
       } else {
@@ -97,7 +92,7 @@ export default function SettingsScreen() {
               <Text style={styles.profileName}>
                 {currentUser?.name || 'Unknown'}, {currentUser?.age || '?'}
               </Text>
-              <Text style={styles.profileEdit}>Tap to edit profile →</Text>
+              <Text style={styles.profileEdit}>Tap to edit profile</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -113,33 +108,29 @@ export default function SettingsScreen() {
             </View>
           ) : (
             <View style={styles.matchesList}>
-              {matches.map((match) => {
-                const otherUser = getOtherUser(match);
-                if (!otherUser) return null;
-                
-                const thread = MatchingService.getThread(match.id);
-                const hasUpcomingCall = thread
-                  ? SchedulingService.getUpcomingCall(thread.id)
-                  : null;
+              {matchDetails.map((detail) => {
+                if (!detail.otherUser) return null;
 
                 return (
                   <TouchableOpacity
-                    key={match.id}
+                    key={detail.matchId}
                     style={styles.matchItem}
-                    onPress={() => navigateToThread(match.id)}
+                    onPress={() => navigateToThread(detail.matchId)}
                   >
                     <Image
-                      source={{ uri: otherUser.photos[0] || 'https://picsum.photos/100/100' }}
+                      source={{
+                        uri: detail.otherUser.photos[0] || 'https://picsum.photos/100/100',
+                      }}
                       style={styles.matchAvatar}
                     />
                     <View style={styles.matchInfo}>
-                      <Text style={styles.matchName}>{otherUser.name}</Text>
+                      <Text style={styles.matchName}>{detail.otherUser.name}</Text>
                       <Text style={styles.matchStatus}>
-                        {hasUpcomingCall
-                          ? '📞 Call scheduled'
-                          : thread?.schedulingState === 'proposed'
-                          ? '⏳ Waiting for confirmation'
-                          : '💬 Schedule a call'}
+                        {detail.upcomingCall
+                          ? 'Call scheduled'
+                          : detail.thread?.schedulingState === 'proposed'
+                          ? 'Waiting for confirmation'
+                          : 'Schedule a call'}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -149,53 +140,18 @@ export default function SettingsScreen() {
           )}
         </View>
 
-        {/* Dev Panel */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🛠️ Dev Panel</Text>
-          <View style={styles.devCard}>
-            <View style={styles.devOption}>
-              <View>
-                <Text style={styles.devOptionLabel}>Auto-match next like</Text>
-                <Text style={styles.devOptionDescription}>
-                  Instantly match with the next person you like
-                </Text>
-              </View>
-              <Switch
-                value={autoMatchNextLike}
-                onValueChange={toggleAutoMatch}
-                trackColor={{ false: colors.surfaceLight, true: colors.primary }}
-                thumbColor={colors.text}
-              />
-            </View>
-
-            <TouchableOpacity style={styles.devButton} onPress={handleReseed}>
-              <Text style={styles.devButtonText}>🔄 Reseed Demo Profiles</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.devButton, styles.devButtonDanger]}
-              onPress={handleResetData}
-              disabled={isResetting}
-            >
-              <Text style={styles.devButtonText}>
-                {isResetting ? 'Resetting...' : '🗑️ Reset All Data'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
         {/* Account Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutButtonText}>Logout</Text>
+            <Text style={styles.logoutButtonText}>Sign Out</Text>
           </TouchableOpacity>
         </View>
 
         {/* App Info */}
         <View style={styles.appInfo}>
           <Text style={styles.appName}>No Text Dating</Text>
-          <Text style={styles.appVersion}>MVP v1.0.0</Text>
+          <Text style={styles.appVersion}>v1.0.0</Text>
           <Text style={styles.appTagline}>Skip the chat. Start talking.</Text>
         </View>
       </View>
@@ -293,49 +249,6 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.sm,
     color: colors.textSecondary,
     marginTop: spacing.xs,
-  },
-  devCard: {
-    backgroundColor: colors.surfaceLight,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.warning,
-    borderStyle: 'dashed',
-  },
-  devOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.surface,
-  },
-  devOptionLabel: {
-    fontSize: typography.sizes.md,
-    fontWeight: typography.weights.medium,
-    color: colors.text,
-  },
-  devOptionDescription: {
-    fontSize: typography.sizes.sm,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    maxWidth: 200,
-  },
-  devButton: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  devButtonDanger: {
-    backgroundColor: colors.error,
-  },
-  devButtonText: {
-    fontSize: typography.sizes.md,
-    color: colors.text,
-    fontWeight: typography.weights.medium,
   },
   logoutButton: {
     backgroundColor: colors.surface,

@@ -7,26 +7,53 @@ import {
   Image,
   SafeAreaView,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SchedulingService, MatchingService } from '../../../src/services';
 import { useAppStore } from '../../../src/store';
 import { colors, spacing, borderRadius, typography } from '../../../src/constants/theme';
+import { CallEvent, UserProfile } from '../../../src/types';
 
 export default function InCallScreen() {
   const { callEventId } = useLocalSearchParams<{ callEventId: string }>();
   const { setActiveCallEvent } = useAppStore();
-  
-  const callEvent = SchedulingService.getCallEvent(callEventId);
-  const thread = callEvent ? SchedulingService.getThread(callEvent.threadId) : null;
-  const match = thread ? MatchingService.getMatch(thread.matchId) : null;
-  const otherUser = match ? MatchingService.getOtherUser(match) : null;
 
-  const [timeRemaining, setTimeRemaining] = useState(callEvent?.durationSeconds || 30);
+  const [callEvent, setCallEvent] = useState<CallEvent | undefined>();
+  const [otherUser, setOtherUser] = useState<UserProfile | undefined>();
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [timeRemaining, setTimeRemaining] = useState(30);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
-  
+
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!callEventId) return;
+
+      const eventData = await SchedulingService.getCallEvent(callEventId);
+      setCallEvent(eventData);
+
+      if (eventData) {
+        setTimeRemaining(eventData.durationSeconds || 30);
+
+        const threadData = await SchedulingService.getThread(eventData.threadId);
+        if (threadData) {
+          const matchData = await MatchingService.getMatch(threadData.matchId);
+          if (matchData) {
+            const other = await MatchingService.getOtherUser(matchData);
+            setOtherUser(other);
+          }
+        }
+      }
+
+      setIsLoading(false);
+    };
+
+    loadData();
+  }, [callEventId]);
 
   // Pulse animation for the call indicator
   useEffect(() => {
@@ -75,6 +102,14 @@ export default function InCallScreen() {
       router.replace(`/feedback/${callEvent.id}`);
     }
   };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
 
   if (!callEvent || !otherUser) {
     return (
@@ -178,6 +213,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   videoBackground: {
     position: 'absolute',

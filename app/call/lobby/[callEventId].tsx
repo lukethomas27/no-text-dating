@@ -6,26 +6,49 @@ import {
   StyleSheet,
   Image,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { format, differenceInSeconds, isPast } from 'date-fns';
 import { SchedulingService, MatchingService } from '../../../src/services';
 import { useAppStore } from '../../../src/store';
 import { colors, spacing, borderRadius, typography } from '../../../src/constants/theme';
+import { CallEvent, CallThread, Match, UserProfile } from '../../../src/types';
 
 export default function CallLobbyScreen() {
   const { callEventId } = useLocalSearchParams<{ callEventId: string }>();
   const { setActiveCallEvent } = useAppStore();
-  
-  const callEvent = SchedulingService.getCallEvent(callEventId);
-  const thread = callEvent ? SchedulingService.getThread(callEvent.threadId) : null;
-  
-  // Get the match and other user
-  const match = thread ? MatchingService.getMatch(thread.matchId) : null;
-  const otherUser = match ? MatchingService.getOtherUser(match) : null;
+
+  const [callEvent, setCallEvent] = useState<CallEvent | undefined>();
+  const [otherUser, setOtherUser] = useState<UserProfile | undefined>();
+  const [isLoading, setIsLoading] = useState(true);
 
   const [countdown, setCountdown] = useState('');
   const [canJoin, setCanJoin] = useState(false);
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!callEventId) return;
+
+      const eventData = await SchedulingService.getCallEvent(callEventId);
+      setCallEvent(eventData);
+
+      if (eventData) {
+        const threadData = await SchedulingService.getThread(eventData.threadId);
+        if (threadData) {
+          const matchData = await MatchingService.getMatch(threadData.matchId);
+          if (matchData) {
+            const other = await MatchingService.getOtherUser(matchData);
+            setOtherUser(other);
+          }
+        }
+      }
+
+      setIsLoading(false);
+    };
+
+    loadData();
+  }, [callEventId]);
 
   useEffect(() => {
     if (!callEvent) return;
@@ -68,6 +91,14 @@ export default function CallLobbyScreen() {
   const handleCancel = () => {
     router.replace('/discovery');
   };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
 
   if (!callEvent || !otherUser) {
     return (
@@ -152,6 +183,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     flex: 1,
