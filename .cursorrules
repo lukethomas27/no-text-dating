@@ -109,10 +109,10 @@ import { colors, spacing, borderRadius, typography } from "@/src/constants/theme
 - Development (`__DEV__`): 30 seconds
 - Production: 15 minutes (900 seconds)
 
-### Phone Auth Testing
-- Test numbers: `+1 555 555 XXXX` format
-- Example: `+15555550123`
+### Phone Auth (Twilio)
+- Test phone number: `+1 555 555 1234`
 - OTP code: `123456`
+- All other numbers send real SMS via Twilio
 
 ### Database Security
 - All tables have Row Level Security (RLS) enabled

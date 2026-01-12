@@ -13,43 +13,24 @@ A dating app MVP where the only post-match interaction is scheduling audio/video
 ### Environment Setup
 
 1. Copy the environment template:
+
 ```bash
 cp .env.example .env
 ```
 
 2. Fill in your Supabase credentials in `.env`:
+
 ```
 EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-### Database Setup
+### Development Testing
 
-1. Run the main SQL schema in your Supabase SQL Editor:
-```bash
-# The schema is located at:
-supabase/schema.sql
-```
+**Test phone number:** `+1 555 555 1234`  
+**OTP code:** `123456`
 
-2. Run the phone auth migration:
-```bash
-supabase/migrations/001_phone_auth.sql
-```
-
-This creates all tables, enums, indexes, and Row Level Security policies.
-
-### Phone Auth Setup
-
-The app uses phone number authentication with OTP verification.
-
-1. In your Supabase Dashboard, go to **Authentication > Providers**
-2. Enable the **Phone** provider
-3. Configure an SMS provider (Twilio, MessageBird, or Vonage)
-
-**For Development/Testing:**
-- Use any phone starting with `+1 555 555` followed by 4 digits
-- Example: `+15555550123`
-- OTP code is always: `123456`
+> ⚠️ Only the test number above bypasses SMS. All other numbers send real SMS via Twilio.
 
 ### Running the App
 
@@ -116,10 +97,9 @@ no-text-dating/
 │   └── constants/
 │       └── theme.ts              # Colors, spacing, typography
 │
-├── supabase/
-│   ├── schema.sql                # Database schema with RLS policies
-│   └── migrations/
-│       └── 001_phone_auth.sql    # Phone authentication migration
+├── supabase/                     # Database schema reference
+│   ├── schema.sql                # Main schema with RLS policies
+│   └── migrations/               # Schema migrations
 │
 └── assets/                       # App icons and splash
 ```
@@ -127,6 +107,7 @@ no-text-dating/
 ## Data Models
 
 ### App Types (camelCase)
+
 Defined in `src/types/index.ts`:
 
 - **UserProfile** - User's dating profile (name, age, prompts, photos)
@@ -140,6 +121,7 @@ Defined in `src/types/index.ts`:
 - **Report** - Safety report on a user
 
 ### Database Types (snake_case)
+
 Defined in `src/types/database.ts` - mirrors Supabase schema for type-safe queries.
 
 ## Services Architecture
@@ -162,15 +144,17 @@ import { AuthService, ProfilesService, MatchingService } from "./src/services";
 ### Type Conversion
 
 The `supabaseRepo.ts` contains converters between database snake_case and app camelCase:
+
 - `dbProfileToUserProfile()` - Database profile → App profile
 - `userProfileToDbProfile()` - App profile → Database profile
 - Similar converters for all entity types
 
 ## Database Schema
 
-The Supabase schema (`supabase/schema.sql`) includes:
+The Supabase database schema is documented in `supabase/schema.sql` for reference:
 
 ### Tables
+
 - `profiles` - User profiles linked to auth.users
 - `swipes` - Like/pass actions
 - `matches` - Mutual matches
@@ -182,6 +166,7 @@ The Supabase schema (`supabase/schema.sql`) includes:
 - `reports` - Safety reports
 
 ### Security
+
 - Row Level Security (RLS) enabled on all tables
 - Users can only read/write their own data
 - Blocked users are filtered from queries
@@ -197,17 +182,19 @@ The duration is determined by `__DEV__` flag in `src/services/index.ts`.
 
 ### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `EXPO_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
+| Variable                        | Description                   |
+| ------------------------------- | ----------------------------- |
+| `EXPO_PUBLIC_SUPABASE_URL`      | Your Supabase project URL     |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous/public key |
 
 ## TODO Checklist
 
 ### Completed
-- [x] Phone auth with OTP verification (Supabase Auth)
+
+- [x] Phone auth with OTP verification (Supabase Auth + Twilio)
 - [x] Persistent database (Supabase)
 - [x] Profile editing with photo picker
+- [x] Profile photo upload to Supabase Storage
 - [x] Discovery swipe interface
 - [x] Match detection and celebration
 - [x] Call scheduling with time slots
@@ -218,9 +205,9 @@ The duration is determined by `__DEV__` flag in `src/services/index.ts`.
 - [x] Row Level Security policies
 
 ### Next Steps
+
 - [ ] Push notifications for matches/calls
-- [ ] Real video calling (Daily.co, Twilio, etc.)
-- [ ] Profile photo upload to Supabase Storage
+- [ ] Real video calling (Daily.co, Twilio Video, etc.)
 - [ ] Swipe animations (react-native-gesture-handler)
 - [ ] Background call notifications
 - [ ] Rate limiting and abuse prevention
@@ -243,17 +230,17 @@ The app uses a dark theme with coral/rose primary colors.
 
 ## Dependencies
 
-| Package | Purpose |
-|---------|---------|
-| expo-router | File-based navigation |
-| @supabase/supabase-js | Supabase client |
-| zustand | Global state management |
-| react-hook-form | Form handling |
-| zod | Schema validation |
-| date-fns | Date/time utilities |
-| @react-native-async-storage/async-storage | Session persistence |
-| expo-image-picker | Photo selection |
-| expo-crypto | UUID generation |
+| Package                                   | Purpose                 |
+| ----------------------------------------- | ----------------------- |
+| expo-router                               | File-based navigation   |
+| @supabase/supabase-js                     | Supabase client         |
+| zustand                                   | Global state management |
+| react-hook-form                           | Form handling           |
+| zod                                       | Schema validation       |
+| date-fns                                  | Date/time utilities     |
+| @react-native-async-storage/async-storage | Session persistence     |
+| expo-image-picker                         | Photo selection         |
+| expo-crypto                               | UUID generation         |
 
 ## No Chat Policy
 
