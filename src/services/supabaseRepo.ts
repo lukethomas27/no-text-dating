@@ -1,6 +1,7 @@
 // Supabase repository - replaces localRepo for production use
 
 import { supabase } from '../lib/supabase';
+import { File } from 'expo-file-system';
 import {
   UserProfile,
   Swipe,
@@ -685,19 +686,19 @@ export const uploadProfilePhoto = async (uri: string): Promise<string> => {
   const fileExtension = uri.split('.').pop()?.toLowerCase() || 'jpg';
   const fileName = `${userId}/${timestamp}.${fileExtension}`;
 
-  // Fetch the image as a blob
-  const response = await fetch(uri);
-  const blob = await response.blob();
-
   // Determine content type
   let contentType = 'image/jpeg';
   if (fileExtension === 'png') contentType = 'image/png';
   else if (fileExtension === 'webp') contentType = 'image/webp';
 
+  // Read file using expo-file-system's new File API (SDK 54+)
+  const file = new File(uri);
+  const arrayBuffer = await file.arrayBuffer();
+
   // Upload to Supabase Storage
   const { error: uploadError } = await supabase.storage
     .from('profile-photos')
-    .upload(fileName, blob, {
+    .upload(fileName, arrayBuffer, {
       contentType,
       upsert: false,
     });
