@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useAppStore } from '../src/store';
 import { colors, spacing, borderRadius, typography } from '../src/constants/theme';
 
@@ -25,10 +25,46 @@ export default function DiscoveryScreen() {
     passCurrentCandidate,
     matches,
     currentUser,
+    refreshMatches,
   } = useAppStore();
 
   const [isProcessing, setIsProcessing] = useState(false);
+  const previousMatchCountRef = useRef(matches.length);
   const candidate = candidates[currentCandidateIndex];
+
+  // Initialize match count on mount
+  useEffect(() => {
+    previousMatchCountRef.current = matches.length;
+  }, []);
+
+  // Check for new matches when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      const checkForNewMatches = async () => {
+        const previousCount = previousMatchCountRef.current;
+        await refreshMatches();
+        const { matches: updatedMatches } = useAppStore.getState();
+        
+        // If we have more matches than before, navigate to the newest one
+        if (updatedMatches.length > previousCount && updatedMatches.length > 0) {
+          const newestMatch = updatedMatches[updatedMatches.length - 1];
+          previousMatchCountRef.current = updatedMatches.length;
+          router.push(`/match/${newestMatch.id}`);
+        } else {
+          previousMatchCountRef.current = updatedMatches.length;
+        }
+      };
+
+      checkForNewMatches();
+
+      // Poll for new matches every 5 seconds while on this screen
+      const pollInterval = setInterval(() => {
+        checkForNewMatches();
+      }, 5000);
+
+      return () => clearInterval(pollInterval);
+    }, [refreshMatches])
+  );
 
   const handleLike = async () => {
     if (isProcessing) return;
