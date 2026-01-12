@@ -116,19 +116,38 @@ export const getCurrentUserId = async (): Promise<string | null> => {
   return user?.id ?? null;
 };
 
-export const signUp = async (email: string, password: string): Promise<Session> => {
-  const { data, error } = await supabase.auth.signUp({ email, password });
-  if (error) throw error;
-  if (!data.user) throw new Error('No user returned from sign up');
-  return {
-    userId: data.user.id,
-    createdAt: data.user.created_at,
-  };
+export const sendOtp = async (phone: string): Promise<{ isNewUser: boolean }> => {
+  // Check if user already exists by looking for a profile with this phone
+  // Note: We can't directly check auth.users, so we assume new user for now
+  // and handle it in verifyOtp based on profile existence
+
+  console.log('supabaseRepo.sendOtp called with:', phone);
+
+  const { data, error } = await supabase.auth.signInWithOtp({
+    phone,
+  });
+
+  console.log('signInWithOtp response:', { data, error });
+
+  if (error) {
+    console.error('Supabase OTP error:', error);
+    throw new Error(error.message || 'Failed to send verification code');
+  }
+
+  // We'll determine if they're new after OTP verification
+  return { isNewUser: false };
 };
 
-export const signIn = async (email: string, password: string): Promise<Session> => {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+export const verifyOtp = async (phone: string, token: string): Promise<Session> => {
+  const { data, error } = await supabase.auth.verifyOtp({
+    phone,
+    token,
+    type: 'sms',
+  });
+
   if (error) throw error;
+  if (!data.user) throw new Error('No user returned from verification');
+
   return {
     userId: data.user.id,
     createdAt: data.user.created_at,
@@ -648,4 +667,84 @@ export const createReport = async (
 
   if (error) throw error;
   return toReport(data);
+};
+
+// ============ Photo Storage Operations ============
+
+/**
+ * Upload a profile photo to Supabase Storage
+ * @param uri - Local file URI from image picker
+ * @returns Public URL of the uploaded photo
+ */
+export const uploadProfilePhoto = async (uri: string): Promise<string> => {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('Not authenticated');
+
+  // Generate unique filename
+  const timestamp = Date.now();
+  const fileExtension = uri.split('.').pop()?.toLowerCase() || 'jpg';
+  const fileName = `${userId}/${timestamp}.${fileExtension}`;
+
+  // Fetch the image as a blob
+  const response = await fetch(uri);
+  const blob = await response.blob();
+
+  // Determine content type
+  let contentType = 'image/jpeg';
+  if (fileExtension === 'png') contentType = 'image/png';
+  else if (fileExtension === 'webp') contentType = 'image/webp';
+
+  // Upload to Supabase Storage
+  const { error: uploadError } = await supabase.storage
+    .from('profile-photos')
+    .upload(fileName, blob, {
+      contentType,
+      upsert: false,
+    });
+
+  if (uploadError) throw uploadError;
+
+  // Get public URL
+  const { data: { publicUrl } } = supabase.storage
+    .from('profile-photos')
+    .getPublicUrl(fileName);
+
+  return publicUrl;
+};
+
+/**
+ * Delete a profile photo from Supabase Storage
+ * @param url - Public URL of the photo to delete
+ */
+export const deleteProfilePhoto = async (url: string): Promise<void> => {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('Not authenticated');
+
+  // Extract file path from URL
+  // URL format: https://xxx.supabase.co/storage/v1/object/public/profile-photos/userId/timestamp.jpg
+  const urlParts = url.split('/profile-photos/');
+  if (urlParts.length !== 2) {
+    console.warn('Invalid photo URL format, skipping deletion:', url);
+    return;
+  }
+
+  const filePath = urlParts[1];
+
+  // Verify the file belongs to this user
+  if (!filePath.startsWith(userId)) {
+    throw new Error('Cannot delete another user\'s photo');
+  }
+
+  const { error } = await supabase.storage
+    .from('profile-photos')
+    .remove([filePath]);
+
+  if (error) throw error;
+};
+
+/**
+ * Check if a URL is a Supabase Storage URL (vs external placeholder)
+ */
+export const isStorageUrl = (url: string): boolean => {
+  return url.includes('supabase') && url.includes('/profile-photos/');
 };

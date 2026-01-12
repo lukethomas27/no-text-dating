@@ -1,0 +1,137 @@
+# No Text Dating - Cursor Rules
+
+## Project Overview
+
+No Text Dating is a React Native/Expo dating app where post-match interaction is limited to scheduling audio/video calls only. **No text messaging features** - only scheduled voice/video calls.
+
+## Tech Stack
+
+- **Framework**: Expo + React Native + TypeScript (strict mode)
+- **Navigation**: Expo Router (file-based routing in `app/`)
+- **State**: Zustand (`src/store/index.ts`)
+- **Backend**: Supabase (Auth, Database, RLS)
+- **Forms**: react-hook-form + zod
+- **Dates**: date-fns
+
+## Development Commands
+
+```bash
+npm install           # Install dependencies
+npx expo start        # Start Expo dev server
+npm run android       # Run on Android
+npm run ios           # Run on iOS
+npm run web           # Run on web
+```
+
+## Architecture Conventions
+
+### File Structure
+
+- `app/` - Expo Router screens (file-based routing)
+- `src/types/index.ts` - App types (camelCase)
+- `src/types/database.ts` - Supabase types (snake_case)
+- `src/services/` - Service layer with repository pattern
+- `src/store/` - Zustand global state
+- `src/constants/theme.ts` - Design system tokens
+- `supabase/` - Database schema and migrations
+
+### Routing Patterns
+
+- Dynamic routes use bracket notation: `[matchId].tsx`, `[callEventId].tsx`
+- Nested routes: `call/lobby/[callEventId].tsx`, `call/in/[callEventId].tsx`
+
+### Type Naming Conventions
+
+- **App types** (`src/types/index.ts`): camelCase - `UserProfile`, `CallEvent`
+- **Database types** (`src/types/database.ts`): snake_case - matches Supabase schema
+- **Converters** in `supabaseRepo.ts`: `dbProfileToUserProfile()`, `userProfileToDbProfile()`
+
+### Services Layer
+
+All services are async and use Supabase. Import from:
+```typescript
+import { AuthService, ProfilesService, MatchingService, SchedulingService, SafetyService } from "@/src/services";
+```
+
+Service interfaces:
+- `AuthService` - `getSession()`, `sendOtp()`, `verifyOtp()`, `signOut()`
+- `ProfilesService` - `getMe()`, `updateMe()`, `getProfile()`, `listCandidates()`
+- `MatchingService` - `like()`, `pass()`, `getMatches()`, `getMatch()`, `getOtherUser()`
+- `SchedulingService` - `createProposal()`, `confirmSlot()`, `getUpcomingCall()`, `updateCallState()`
+- `SafetyService` - `block()`, `report()`, `createFeedback()`
+
+### State Management
+
+Use Zustand store via `useAppStore` hook:
+```typescript
+import { useAppStore } from "@/src/store";
+```
+
+## Design System
+
+Always use theme constants from `src/constants/theme.ts`:
+```typescript
+import { colors, spacing, borderRadius, typography } from "@/src/constants/theme";
+```
+
+### Theme Overview
+- **Style**: Dark theme with coral/rose primary colors
+- **Primary**: `#E85D75` (coral/rose)
+- **Secondary**: `#6C5CE7` (deep purple)
+- **Background**: `#0F0F1A` (dark)
+- **Like action**: `#4ECDC4` (teal)
+- **Pass action**: `#95A5A6` (gray)
+
+### Spacing Scale
+- xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48
+
+## Core Data Models
+
+- `UserProfile` - User's dating profile (name, age, prompts, photos)
+- `Swipe` - Like/Pass action on another user
+- `Match` - Mutual like between two users
+- `CallThread` - Scheduling context for a match
+- `CallProposal` - Proposed call times from one user
+- `CallEvent` - Confirmed scheduled call
+- `Feedback` - Post-call rating
+- `Block` / `Report` - Safety features
+
+## Critical Rules
+
+### No Messaging Policy
+**NEVER add text messaging or chat features.** This app intentionally has:
+- No text chat
+- No message models
+- No chat UI components
+- Only scheduled voice/video calls
+
+### Call Duration
+- Development (`__DEV__`): 30 seconds
+- Production: 15 minutes (900 seconds)
+
+### Phone Auth Testing
+- Test numbers: `+1 555 555 XXXX` format
+- Example: `+15555550123`
+- OTP code: `123456`
+
+### Database Security
+- All tables have Row Level Security (RLS) enabled
+- Users can only read/write their own data
+- Blocked users are filtered from queries
+
+## Import Aliases
+
+Use the `@/` alias for imports:
+```typescript
+import { colors } from "@/src/constants/theme";
+import { useAppStore } from "@/src/store";
+import type { UserProfile } from "@/src/types";
+```
+
+## Key Patterns
+
+1. Always convert between database snake_case and app camelCase using converter functions
+2. Use Zustand store for global state, not prop drilling
+3. Follow existing screen patterns in `app/` directory
+4. Maintain consistent styling using theme tokens
+5. Handle loading and error states in all async operations

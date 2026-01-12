@@ -29,8 +29,9 @@ interface AppState {
 
   // Actions
   initialize: () => Promise<void>;
-  signUp: (email: string, password: string, name: string, age: number) => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
+  sendOtp: (phone: string) => Promise<{ isNewUser: boolean }>;
+  verifyOtp: (phone: string, token: string) => Promise<{ needsProfile: boolean }>;
+  completeProfile: (name: string, age: number) => Promise<void>;
   signOut: () => Promise<void>;
 
   // Profile actions
@@ -125,53 +126,53 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   // Auth actions
-  signUp: async (email: string, password: string, name: string, age: number) => {
-    set({ isLoading: true });
-    try {
-      const session = await AuthService.signUp(email, password);
-
-      // Create the user profile
-      const profile = await ProfilesService.createProfile({
-        name,
-        age,
-        prompts: ['', '', ''],
-        photos: [],
-      });
-
-      const candidates = await ProfilesService.listCandidates();
-      set({
-        session,
-        currentUser: profile,
-        candidates,
-        currentCandidateIndex: 0,
-        matches: [],
-        isLoading: false,
-      });
-    } catch (error) {
-      set({ isLoading: false });
-      throw error;
-    }
+  // Note: These don't set isLoading to avoid unmounting the auth screen
+  sendOtp: async (phone: string) => {
+    const result = await AuthService.sendOtp(phone);
+    return result;
   },
 
-  signIn: async (email: string, password: string) => {
-    set({ isLoading: true });
-    try {
-      const session = await AuthService.signIn(email, password);
-      const currentUser = await ProfilesService.getMe();
-      const candidates = currentUser ? await ProfilesService.listCandidates() : [];
-      const matches = currentUser ? await MatchingService.getMatches() : [];
+  verifyOtp: async (phone: string, token: string) => {
+    const session = await AuthService.verifyOtp(phone, token);
+
+    // Check if user has a profile
+    const currentUser = await ProfilesService.getMe();
+
+    if (currentUser) {
+      // Existing user with profile
+      const candidates = await ProfilesService.listCandidates();
+      const matches = await MatchingService.getMatches();
       set({
         session,
         currentUser,
         candidates,
         currentCandidateIndex: 0,
         matches,
-        isLoading: false,
       });
-    } catch (error) {
-      set({ isLoading: false });
-      throw error;
+      return { needsProfile: false };
+    } else {
+      // New user needs to complete profile
+      set({ session });
+      return { needsProfile: true };
     }
+  },
+
+  completeProfile: async (name: string, age: number) => {
+    // Create the user profile
+    const profile = await ProfilesService.createProfile({
+      name,
+      age,
+      prompts: ['', '', ''],
+      photos: [],
+    });
+
+    const candidates = await ProfilesService.listCandidates();
+    set({
+      currentUser: profile,
+      candidates,
+      currentCandidateIndex: 0,
+      matches: [],
+    });
   },
 
   signOut: async () => {

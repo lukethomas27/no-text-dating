@@ -8,12 +8,14 @@ import {
   ScrollView,
   Image,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { useAppStore } from '../../src/store';
+import { PhotoStorageService } from '../../src/services';
 import { colors, spacing, borderRadius, typography } from '../../src/constants/theme';
 
 const profileSchema = z.object({
@@ -30,7 +32,9 @@ type ProfileForm = z.infer<typeof profileSchema>;
 export default function EditProfileScreen() {
   const { currentUser, updateProfile } = useAppStore();
   const [photos, setPhotos] = useState<string[]>(currentUser?.photos || []);
+  const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
 
   const { control, handleSubmit, formState: { errors } } = useForm<ProfileForm>({
     defaultValues: {
@@ -62,24 +66,60 @@ export default function EditProfileScreen() {
   };
 
   const removePhoto = (index: number) => {
+    const photoToRemove = photos[index];
+    // Track removed storage photos for cleanup
+    if (PhotoStorageService.isStorageUrl(photoToRemove)) {
+      setRemovedPhotos([...removedPhotos, photoToRemove]);
+    }
     setPhotos(photos.filter((_, i) => i !== index));
+  };
+
+  // Check if a URI is a local file (needs upload) vs already a URL
+  const isLocalFile = (uri: string): boolean => {
+    return uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('ph://');
   };
 
   const onSubmit = async (data: ProfileForm) => {
     setIsSaving(true);
     try {
+      // Upload any new local photos to Supabase Storage
+      const uploadedPhotos: string[] = [];
+      for (let i = 0; i < photos.length; i++) {
+        const photo = photos[i];
+        if (isLocalFile(photo)) {
+          setUploadingIndex(i);
+          const url = await PhotoStorageService.uploadPhoto(photo);
+          uploadedPhotos.push(url);
+        } else {
+          uploadedPhotos.push(photo);
+        }
+      }
+      setUploadingIndex(null);
+
+      // Delete removed photos from storage
+      for (const photoUrl of removedPhotos) {
+        try {
+          await PhotoStorageService.deletePhoto(photoUrl);
+        } catch (err) {
+          console.warn('Failed to delete photo:', err);
+          // Continue anyway - photo cleanup is best effort
+        }
+      }
+
       await updateProfile({
         name: data.name,
         age: data.age,
         bio: data.bio,
         prompts: [data.prompt1, data.prompt2, data.prompt3],
-        photos,
+        photos: uploadedPhotos,
       });
       router.back();
     } catch (error) {
-      Alert.alert('Error', 'Failed to save profile');
+      console.error('Failed to save profile:', error);
+      Alert.alert('Error', 'Failed to save profile. Please try again.');
     } finally {
       setIsSaving(false);
+      setUploadingIndex(null);
     }
   };
 
@@ -92,16 +132,32 @@ export default function EditProfileScreen() {
           {photos.map((photo, index) => (
             <View key={index} style={styles.photoContainer}>
               <Image source={{ uri: photo }} style={styles.photo} />
+              {uploadingIndex === index && (
+                <View style={styles.uploadingOverlay}>
+                  <ActivityIndicator size="small" color={colors.text} />
+                  <Text style={styles.uploadingText}>Uploading...</Text>
+                </View>
+              )}
+              {isLocalFile(photo) && uploadingIndex !== index && (
+                <View style={styles.pendingBadge}>
+                  <Text style={styles.pendingBadgeText}>New</Text>
+                </View>
+              )}
               <TouchableOpacity
                 style={styles.removePhotoButton}
                 onPress={() => removePhoto(index)}
+                disabled={isSaving}
               >
                 <Text style={styles.removePhotoText}>×</Text>
               </TouchableOpacity>
             </View>
           ))}
           {photos.length < 3 && (
-            <TouchableOpacity style={styles.addPhotoButton} onPress={pickImage}>
+            <TouchableOpacity 
+              style={[styles.addPhotoButton, isSaving && styles.addPhotoButtonDisabled]} 
+              onPress={pickImage}
+              disabled={isSaving}
+            >
               <Text style={styles.addPhotoIcon}>+</Text>
               <Text style={styles.addPhotoText}>Add Photo</Text>
             </TouchableOpacity>
@@ -297,6 +353,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  addPhotoButtonDisabled: {
+    opacity: 0.5,
+  },
   addPhotoIcon: {
     fontSize: 32,
     color: colors.textSecondary,
@@ -305,6 +364,32 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.xs,
     color: colors.textSecondary,
     marginTop: spacing.xs,
+  },
+  uploadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: borderRadius.md,
+  },
+  uploadingText: {
+    color: colors.text,
+    fontSize: typography.sizes.xs,
+    marginTop: spacing.xs,
+  },
+  pendingBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: colors.secondary,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  pendingBadgeText: {
+    color: colors.text,
+    fontSize: typography.sizes.xs,
+    fontWeight: typography.weights.medium,
   },
   label: {
     fontSize: typography.sizes.sm,

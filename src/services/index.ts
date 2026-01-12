@@ -7,15 +7,15 @@ import * as supabaseRepo from './supabaseRepo';
 // ============ Auth Service ============
 export interface IAuthService {
   getSession(): Promise<Session | null>;
-  signUp(email: string, password: string): Promise<Session>;
-  signIn(email: string, password: string): Promise<Session>;
+  sendOtp(phone: string): Promise<{ isNewUser: boolean }>;
+  verifyOtp(phone: string, token: string): Promise<Session>;
   signOut(): Promise<void>;
 }
 
 export const AuthService: IAuthService = {
   getSession: () => supabaseRepo.getSession(),
-  signUp: (email, password) => supabaseRepo.signUp(email, password),
-  signIn: (email, password) => supabaseRepo.signIn(email, password),
+  sendOtp: (phone) => supabaseRepo.sendOtp(phone),
+  verifyOtp: (phone, token) => supabaseRepo.verifyOtp(phone, token),
   signOut: () => supabaseRepo.signOut(),
 };
 
@@ -136,4 +136,17 @@ export const SafetyService: ISafetyService = {
   createFeedback: async (callEventId, rating) => {
     await supabaseRepo.createFeedback(callEventId, rating);
   },
+};
+
+// ============ Photo Storage Service ============
+export interface IPhotoStorageService {
+  uploadPhoto(uri: string): Promise<string>;
+  deletePhoto(url: string): Promise<void>;
+  isStorageUrl(url: string): boolean;
+}
+
+export const PhotoStorageService: IPhotoStorageService = {
+  uploadPhoto: (uri) => supabaseRepo.uploadProfilePhoto(uri),
+  deletePhoto: (url) => supabaseRepo.deleteProfilePhoto(url),
+  isStorageUrl: (url) => supabaseRepo.isStorageUrl(url),
 };

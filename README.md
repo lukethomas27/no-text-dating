@@ -2,7 +2,56 @@
 
 A dating app MVP where the only post-match interaction is scheduling audio/video calls. No messaging, no texting — just real conversations.
 
-## 🚀 Quick Start
+## Quick Start
+
+### Prerequisites
+
+- Node.js 18+
+- Expo CLI (`npm install -g expo-cli`)
+- Supabase account with a project created
+
+### Environment Setup
+
+1. Copy the environment template:
+```bash
+cp .env.example .env
+```
+
+2. Fill in your Supabase credentials in `.env`:
+```
+EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+### Database Setup
+
+1. Run the main SQL schema in your Supabase SQL Editor:
+```bash
+# The schema is located at:
+supabase/schema.sql
+```
+
+2. Run the phone auth migration:
+```bash
+supabase/migrations/001_phone_auth.sql
+```
+
+This creates all tables, enums, indexes, and Row Level Security policies.
+
+### Phone Auth Setup
+
+The app uses phone number authentication with OTP verification.
+
+1. In your Supabase Dashboard, go to **Authentication > Providers**
+2. Enable the **Phone** provider
+3. Configure an SMS provider (Twilio, MessageBird, or Vonage)
+
+**For Development/Testing:**
+- Use any phone starting with `+1 555 555` followed by 4 digits
+- Example: `+15555550123`
+- OTP code is always: `123456`
+
+### Running the App
 
 ```bash
 # Install dependencies
@@ -17,26 +66,27 @@ npm run ios
 npm run web
 ```
 
-## 📱 App Flow
+## App Flow
 
-1. **Auth** - Choose a demo profile or create your own
-2. **Discovery** - Swipe through potential matches (Like/Pass)
-3. **Match** - When mutual interest occurs, you're prompted to schedule a call
-4. **Scheduling** - Propose call times (audio or video)
-5. **Call Lobby** - Wait for your scheduled call time
-6. **In-Call** - Simulated video/audio call with countdown timer
-7. **Feedback** - Rate the call: Interested / Not Interested / Report / Block
+1. **Auth** - Enter phone number, receive OTP via SMS, verify code
+2. **Profile Setup** - New users enter name/age, then complete their profile (photos, bio, prompts)
+3. **Discovery** - Swipe through potential matches (Like/Pass)
+4. **Match** - When mutual interest occurs, you're prompted to schedule a call
+5. **Scheduling** - Propose call times (audio or video)
+6. **Call Lobby** - Wait for your scheduled call time
+7. **In-Call** - Simulated video/audio call with countdown timer
+8. **Feedback** - Rate the call: Interested / Not Interested / Report / Block
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 no-text-dating/
 ├── app/                          # Expo Router screens
 │   ├── _layout.tsx               # Root layout
-│   ├── index.tsx                 # Entry redirect
-│   ├── auth.tsx                  # Login/profile selection
+│   ├── index.tsx                 # Entry redirect (auth check)
+│   ├── auth.tsx                  # Phone auth with OTP
 │   ├── discovery.tsx             # Main swipe screen
-│   ├── settings.tsx              # Settings + dev panel
+│   ├── settings.tsx              # Settings + matches list
 │   ├── profile/
 │   │   ├── edit.tsx              # Edit your profile
 │   │   └── [id].tsx              # View other profiles
@@ -52,22 +102,32 @@ no-text-dating/
 │
 ├── src/
 │   ├── types/
-│   │   └── index.ts              # TypeScript type definitions
+│   │   ├── index.ts              # App TypeScript types (camelCase)
+│   │   └── database.ts           # Supabase database types (snake_case)
 │   ├── services/
-│   │   ├── index.ts              # Service interfaces (swappable)
-│   │   ├── localRepo.ts          # In-memory data store
+│   │   ├── index.ts              # Service layer (uses Supabase)
+│   │   ├── supabaseRepo.ts       # Supabase repository implementation
+│   │   ├── localRepo.ts          # Legacy in-memory store (unused)
 │   │   └── seedData.ts           # Demo profile data
+│   ├── lib/
+│   │   └── supabase.ts           # Supabase client configuration
 │   ├── store/
 │   │   └── index.ts              # Zustand global state
 │   └── constants/
 │       └── theme.ts              # Colors, spacing, typography
 │
+├── supabase/
+│   ├── schema.sql                # Database schema with RLS policies
+│   └── migrations/
+│       └── 001_phone_auth.sql    # Phone authentication migration
+│
 └── assets/                       # App icons and splash
 ```
 
-## 🗄️ Data Models
+## Data Models
 
-All types are defined in `src/types/index.ts`:
+### App Types (camelCase)
+Defined in `src/types/index.ts`:
 
 - **UserProfile** - User's dating profile (name, age, prompts, photos)
 - **Swipe** - Like/Pass action on another user
@@ -79,59 +139,54 @@ All types are defined in `src/types/index.ts`:
 - **Block** - Blocked user relationship
 - **Report** - Safety report on a user
 
-## 🔌 Services Architecture
+### Database Types (snake_case)
+Defined in `src/types/database.ts` - mirrors Supabase schema for type-safe queries.
 
-Services are designed with interfaces that can be swapped for real backends:
+## Services Architecture
+
+The app uses a service layer pattern with Supabase as the backend:
 
 ```typescript
-// Current: Local in-memory storage
+// All services are async and use Supabase
 import { AuthService, ProfilesService, MatchingService } from "./src/services";
-
-// Future: Swap for Supabase
-// Just implement the same interfaces with Supabase calls
 ```
 
 ### Service Interfaces
 
-- **AuthService** - `getSession()`, `loginAs()`, `logout()`
-- **ProfilesService** - `getMe()`, `updateMe()`, `listCandidates()`
-- **MatchingService** - `like()`, `pass()`, `getMatches()`
-- **SchedulingService** - `createProposal()`, `confirmSlot()`, `getUpcomingCall()`
-- **CallProvider** - `createRoom()` (mock video service)
+- **AuthService** - `getSession()`, `sendOtp()`, `verifyOtp()`, `signOut()`
+- **ProfilesService** - `getMe()`, `updateMe()`, `getProfile()`, `listCandidates()`
+- **MatchingService** - `like()`, `pass()`, `getMatches()`, `getMatch()`, `getOtherUser()`
+- **SchedulingService** - `createProposal()`, `confirmSlot()`, `getUpcomingCall()`, `updateCallState()`
 - **SafetyService** - `block()`, `report()`, `createFeedback()`
 
-## 🔄 Swapping localRepo for Supabase
+### Type Conversion
 
-1. Create Supabase tables matching the TypeScript types
-2. Implement each service interface with Supabase client calls:
+The `supabaseRepo.ts` contains converters between database snake_case and app camelCase:
+- `dbProfileToUserProfile()` - Database profile → App profile
+- `userProfileToDbProfile()` - App profile → Database profile
+- Similar converters for all entity types
 
-```typescript
-// Example: ProfilesService with Supabase
-export const ProfilesService: IProfilesService = {
-  getMe: async () => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", session.userId)
-      .single();
-    return data;
-  },
-  // ... implement other methods
-};
-```
+## Database Schema
 
-3. Add RLS policies for security
-4. Replace imports in `src/services/index.ts`
+The Supabase schema (`supabase/schema.sql`) includes:
 
-## 🛠️ Dev Panel
+### Tables
+- `profiles` - User profiles linked to auth.users
+- `swipes` - Like/pass actions
+- `matches` - Mutual matches
+- `call_threads` - Scheduling state per match
+- `call_proposals` - Proposed call times
+- `call_events` - Confirmed calls
+- `feedbacks` - Post-call ratings
+- `blocks` - Blocked relationships
+- `reports` - Safety reports
 
-Access the Dev Panel in Settings to:
+### Security
+- Row Level Security (RLS) enabled on all tables
+- Users can only read/write their own data
+- Blocked users are filtered from queries
 
-- **Auto-match next like** - Instantly create matches for testing
-- **Reseed Demo Profiles** - Restore the 12 demo users
-- **Reset All Data** - Clear everything and start fresh
-
-## ⚙️ Configuration
+## Configuration
 
 ### Call Duration
 
@@ -140,11 +195,18 @@ Access the Dev Panel in Settings to:
 
 The duration is determined by `__DEV__` flag in `src/services/index.ts`.
 
-## 📋 TODO Checklist
+### Environment Variables
 
-### MVP Complete ✅
+| Variable | Description |
+|----------|-------------|
+| `EXPO_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous/public key |
 
-- [x] Auth flow (fake/demo)
+## TODO Checklist
+
+### Completed
+- [x] Phone auth with OTP verification (Supabase Auth)
+- [x] Persistent database (Supabase)
 - [x] Profile editing with photo picker
 - [x] Discovery swipe interface
 - [x] Match detection and celebration
@@ -153,20 +215,18 @@ The duration is determined by `__DEV__` flag in `src/services/index.ts`.
 - [x] Simulated in-call experience
 - [x] Post-call feedback
 - [x] Block/Report functionality
-- [x] Dev panel for testing
+- [x] Row Level Security policies
 
-### Next Steps 🚧
-
-- [ ] Real authentication (Supabase Auth)
-- [ ] Persistent database (Supabase)
+### Next Steps
 - [ ] Push notifications for matches/calls
 - [ ] Real video calling (Daily.co, Twilio, etc.)
-- [ ] Profile photo upload to cloud storage
+- [ ] Profile photo upload to Supabase Storage
 - [ ] Swipe animations (react-native-gesture-handler)
 - [ ] Background call notifications
 - [ ] Rate limiting and abuse prevention
+- [ ] International phone number support
 
-## 🎨 Design System
+## Design System
 
 Colors, spacing, and typography are centralized in `src/constants/theme.ts`:
 
@@ -181,30 +241,31 @@ import {
 
 The app uses a dark theme with coral/rose primary colors.
 
-## 📦 Dependencies
+## Dependencies
 
-| Package                                   | Purpose                 |
-| ----------------------------------------- | ----------------------- |
-| expo-router                               | File-based navigation   |
-| zustand                                   | Global state management |
-| react-hook-form                           | Form handling           |
-| zod                                       | Schema validation       |
-| date-fns                                  | Date/time utilities     |
-| @react-native-async-storage/async-storage | Optional persistence    |
-| expo-image-picker                         | Photo selection         |
-| uuid                                      | Unique ID generation    |
+| Package | Purpose |
+|---------|---------|
+| expo-router | File-based navigation |
+| @supabase/supabase-js | Supabase client |
+| zustand | Global state management |
+| react-hook-form | Form handling |
+| zod | Schema validation |
+| date-fns | Date/time utilities |
+| @react-native-async-storage/async-storage | Session persistence |
+| expo-image-picker | Photo selection |
+| expo-crypto | UUID generation |
 
-## 🔒 No Chat Policy
+## No Chat Policy
 
 This app intentionally has **no messaging features**:
 
-- ❌ No text chat
-- ❌ No message models
-- ❌ No chat UI components
-- ✅ Only scheduled voice/video calls
+- No text chat
+- No message models
+- No chat UI components
+- Only scheduled voice/video calls
 
 The goal is to encourage meaningful, real-time conversations over text-based small talk.
 
 ---
 
-Built with ❤️ using Expo + React Native + TypeScript
+Built with Expo + React Native + TypeScript + Supabase
