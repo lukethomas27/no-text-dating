@@ -281,7 +281,7 @@ export const createSwipe = async (
   const userId = await getCurrentUserId();
   if (!userId) throw new Error('Not authenticated');
 
-  // Create the swipe
+  // Create the swipe - a database trigger handles match creation on mutual likes
   const { data: swipeData, error: swipeError } = await supabase
     .from('swipes')
     .insert({
@@ -298,18 +298,18 @@ export const createSwipe = async (
   let matchId: string | undefined;
 
   if (action === 'like') {
-    // Check for mutual like
-    const { data: mutualSwipe } = await supabase
-      .from('swipes')
-      .select('*')
-      .eq('from_id', toId)
-      .eq('to_id', userId)
-      .eq('action', 'like')
+    // Check if a match was created by the database trigger
+    // The trigger creates matches automatically on mutual likes
+    const [first, second] = [userId, toId].sort();
+    const { data: match } = await supabase
+      .from('matches')
+      .select('id')
+      .eq('user_a_id', first)
+      .eq('user_b_id', second)
+      .eq('state', 'active')
       .single();
 
-    if (mutualSwipe) {
-      // Create match
-      const match = await createMatch(userId, toId);
+    if (match) {
       isMatch = true;
       matchId = match.id;
     }

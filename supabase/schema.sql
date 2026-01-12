@@ -227,10 +227,20 @@ CREATE POLICY "Users can view own matches"
     ON matches FOR SELECT
     USING (auth.uid() = user_a_id OR auth.uid() = user_b_id);
 
+CREATE POLICY "Users can create matches they participate in"
+    ON matches FOR INSERT
+    WITH CHECK (
+        auth.uid() = user_a_id OR auth.uid() = user_b_id
+    );
+
 -- Call threads policies
 CREATE POLICY "Match participants can view call threads"
     ON call_threads FOR SELECT
     USING (is_match_participant(match_id, auth.uid()));
+
+CREATE POLICY "Match participants can create call threads"
+    ON call_threads FOR INSERT
+    WITH CHECK (is_match_participant(match_id, auth.uid()));
 
 CREATE POLICY "Match participants can update call threads"
     ON call_threads FOR UPDATE
@@ -262,6 +272,16 @@ CREATE POLICY "Match participants can create proposals"
 CREATE POLICY "Match participants can view call events"
     ON call_events FOR SELECT
     USING (
+        EXISTS (
+            SELECT 1 FROM call_threads ct
+            WHERE ct.id = thread_id
+            AND is_match_participant(ct.match_id, auth.uid())
+        )
+    );
+
+CREATE POLICY "Match participants can create call events"
+    ON call_events FOR INSERT
+    WITH CHECK (
         EXISTS (
             SELECT 1 FROM call_threads ct
             WHERE ct.id = thread_id
