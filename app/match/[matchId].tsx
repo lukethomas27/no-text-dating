@@ -78,8 +78,8 @@ export default function MatchScreen() {
     return (
       <View style={styles.container}>
         <Text style={styles.errorText}>Match not found</Text>
-        <TouchableOpacity style={styles.button} onPress={() => router.back()}>
-          <Text style={styles.buttonText}>Go Back</Text>
+        <TouchableOpacity style={styles.button} onPress={() => router.replace('/discovery')}>
+          <Text style={styles.buttonText}>Go to Discovery</Text>
         </TouchableOpacity>
       </View>
     );

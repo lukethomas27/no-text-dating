@@ -104,8 +104,8 @@ export default function CallLobbyScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <Text style={styles.errorText}>Call not found</Text>
-        <TouchableOpacity style={styles.button} onPress={() => router.back()}>
-          <Text style={styles.buttonText}>Go Back</Text>
+        <TouchableOpacity style={styles.button} onPress={() => router.replace('/discovery')}>
+          <Text style={styles.buttonText}>Go to Discovery</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
