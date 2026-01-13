@@ -1,14 +1,33 @@
 // Core data types for the No Text Dating app
 
+export type Gender = 'man' | 'woman' | 'non_binary' | 'other';
+export type Sexuality = 'straight' | 'gay' | 'lesbian' | 'bisexual' | 'pansexual' | 'queer' | 'asexual' | 'other';
+export type ShowMePreference = 'men' | 'women' | 'everyone';
+
 export interface UserProfile {
   id: string;
   name: string;
-  age: number;
+  birthday: string; // ISO date string (YYYY-MM-DD)
+  gender: Gender;
+  sexuality: Sexuality;
+  showMe: ShowMePreference;
   prompts: [string, string, string];
   photos: string[];
   bio?: string;
   createdAt: string;
 }
+
+// Helper to calculate age from birthday
+export const calculateAge = (birthday: string): number => {
+  const today = new Date();
+  const birthDate = new Date(birthday);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+};
 
 export interface Swipe {
   fromId: string;

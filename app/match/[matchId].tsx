@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,99 @@ import {
   Animated,
   ActivityIndicator,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MatchingService } from '../../src/services';
 import { useAppStore } from '../../src/store';
-import { colors, spacing, borderRadius, typography } from '../../src/constants/theme';
+import { colors, spacing, borderRadius, typography, shadows } from '../../src/constants/theme';
 import { Match, UserProfile, CallThread } from '../../src/types';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
+
+// Confetti particle component
+const Particle = ({ delay, startX }: { delay: number; startX: number }) => {
+  const translateY = useRef(new Animated.Value(-50)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const rotate = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0)).current;
+
+  const particleColors = [colors.primary, colors.secondary, colors.accent, colors.success];
+  const color = particleColors[Math.floor(Math.random() * particleColors.length)];
+  const size = 8 + Math.random() * 8;
+
+  useEffect(() => {
+    const xOffset = (Math.random() - 0.5) * 100;
+
+    Animated.sequence([
+      Animated.delay(delay),
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: height * 0.8,
+          duration: 3000 + Math.random() * 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateX, {
+          toValue: xOffset,
+          duration: 3000 + Math.random() * 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(rotate, {
+          toValue: 360 * (Math.random() > 0.5 ? 1 : -1),
+          duration: 3000,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+
+    // Fade out
+    setTimeout(() => {
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 1000,
+        useNativeDriver: true,
+      }).start();
+    }, delay + 2500);
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        styles.particle,
+        {
+          left: startX,
+          width: size,
+          height: size,
+          backgroundColor: color,
+          borderRadius: size / 2,
+          opacity,
+          transform: [
+            { translateY },
+            { translateX },
+            { scale },
+            {
+              rotate: rotate.interpolate({
+                inputRange: [0, 360],
+                outputRange: ['0deg', '360deg'],
+              }),
+            },
+          ],
+        },
+      ]}
+    />
+  );
+};
 
 export default function MatchScreen() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
@@ -25,9 +111,20 @@ export default function MatchScreen() {
   const [otherUser, setOtherUser] = useState<UserProfile | undefined>();
   const [thread, setThread] = useState<CallThread | undefined>();
   const [isLoading, setIsLoading] = useState(true);
+  const [particles, setParticles] = useState<{ id: number; delay: number; x: number }[]>([]);
 
-  const [scaleAnim] = useState(new Animated.Value(0));
-  const [fadeAnim] = useState(new Animated.Value(0));
+  // Animations
+  const containerScale = useRef(new Animated.Value(0.8)).current;
+  const containerOpacity = useRef(new Animated.Value(0)).current;
+  const titleScale = useRef(new Animated.Value(0)).current;
+  const photo1Anim = useRef(new Animated.Value(-100)).current;
+  const photo2Anim = useRef(new Animated.Value(100)).current;
+  const heartScale = useRef(new Animated.Value(0)).current;
+  const heartPulse = useRef(new Animated.Value(1)).current;
+  const textOpacity = useRef(new Animated.Value(0)).current;
+  const buttonSlide = useRef(new Animated.Value(100)).current;
+  const buttonOpacity = useRef(new Animated.Value(0)).current;
+  const glowPulse = useRef(new Animated.Value(0.5)).current;
 
   useEffect(() => {
     const loadData = async () => {
@@ -46,29 +143,132 @@ export default function MatchScreen() {
       }
 
       setIsLoading(false);
-
-      // Start entrance animation after data loads
-      Animated.sequence([
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          tension: 50,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
     };
 
     loadData();
   }, [matchId]);
 
+  useEffect(() => {
+    if (!isLoading && match && otherUser) {
+      // Trigger haptic celebration
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Generate confetti particles
+      const newParticles = Array.from({ length: 30 }, (_, i) => ({
+        id: i,
+        delay: i * 100,
+        x: Math.random() * width,
+      }));
+      setParticles(newParticles);
+
+      // Start animations sequence
+      Animated.sequence([
+        // Container entrance
+        Animated.parallel([
+          Animated.spring(containerScale, {
+            toValue: 1,
+            tension: 50,
+            friction: 8,
+            useNativeDriver: true,
+          }),
+          Animated.timing(containerOpacity, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]),
+        // Title pop
+        Animated.spring(titleScale, {
+          toValue: 1,
+          tension: 100,
+          friction: 6,
+          useNativeDriver: true,
+        }),
+        // Photos slide in
+        Animated.parallel([
+          Animated.spring(photo1Anim, {
+            toValue: 0,
+            tension: 40,
+            friction: 8,
+            useNativeDriver: true,
+          }),
+          Animated.spring(photo2Anim, {
+            toValue: 0,
+            tension: 40,
+            friction: 8,
+            useNativeDriver: true,
+          }),
+        ]),
+        // Heart appears
+        Animated.spring(heartScale, {
+          toValue: 1,
+          tension: 150,
+          friction: 5,
+          useNativeDriver: true,
+        }),
+        // Text fades in
+        Animated.timing(textOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        // Button slides up
+        Animated.parallel([
+          Animated.spring(buttonSlide, {
+            toValue: 0,
+            tension: 40,
+            friction: 8,
+            useNativeDriver: true,
+          }),
+          Animated.timing(buttonOpacity, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+
+      // Continuous heart pulse
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(heartPulse, {
+            toValue: 1.2,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(heartPulse, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+
+      // Glow pulse
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowPulse, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(glowPulse, {
+            toValue: 0.5,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    }
+  }, [isLoading, match, otherUser]);
+
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <View style={styles.loadingContainer}>
+        <LinearGradient
+          colors={[colors.background, colors.backgroundElevated]}
+          style={StyleSheet.absoluteFillObject}
+        />
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -76,77 +276,180 @@ export default function MatchScreen() {
 
   if (!match || !otherUser || !thread) {
     return (
-      <View style={styles.container}>
+      <View style={styles.errorContainer}>
+        <LinearGradient
+          colors={[colors.background, colors.backgroundElevated]}
+          style={StyleSheet.absoluteFillObject}
+        />
         <Text style={styles.errorText}>Match not found</Text>
-        <TouchableOpacity style={styles.button} onPress={() => router.replace('/discovery')}>
-          <Text style={styles.buttonText}>Go to Discovery</Text>
+        <TouchableOpacity
+          style={styles.errorButton}
+          onPress={() => router.replace('/discovery')}
+        >
+          <Text style={styles.errorButtonText}>Go to Discovery</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   const handleScheduleCall = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.replace(`/schedule/${thread.id}`);
+  };
+
+  const handleLater = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.replace('/discovery');
   };
 
   return (
     <View style={styles.container}>
-      {/* Celebration Background */}
-      <View style={styles.celebrationBg}>
-        <Text style={styles.emoji}>🎉</Text>
-        <Text style={styles.emoji2}>✨</Text>
-        <Text style={styles.emoji3}>💫</Text>
-      </View>
+      {/* Gradient background */}
+      <LinearGradient
+        colors={[colors.background, '#1a0a1a', colors.background]}
+        style={StyleSheet.absoluteFillObject}
+      />
 
-      {/* Match Content */}
+      {/* Animated glow orbs */}
+      <Animated.View style={[styles.glowOrb, styles.glowOrb1, { opacity: glowPulse }]} />
+      <Animated.View style={[styles.glowOrb, styles.glowOrb2, { opacity: glowPulse }]} />
+
+      {/* Confetti particles */}
+      {particles.map((particle) => (
+        <Particle key={particle.id} delay={particle.delay} startX={particle.x} />
+      ))}
+
+      {/* Main content */}
       <Animated.View
         style={[
           styles.content,
           {
-            transform: [{ scale: scaleAnim }],
+            opacity: containerOpacity,
+            transform: [{ scale: containerScale }],
           },
         ]}
       >
-        <Text style={styles.matchTitle}>It's a Match!</Text>
+        {/* Title */}
+        <Animated.View style={{ transform: [{ scale: titleScale }] }}>
+          <Text style={styles.matchTitle}>It's a Match!</Text>
+          <View style={styles.titleUnderline}>
+            <LinearGradient
+              colors={colors.gradientPrimary as [string, string, ...string[]]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.underlineGradient}
+            />
+          </View>
+        </Animated.View>
 
-        {/* Profile Photos */}
+        {/* Profile photos */}
         <View style={styles.photosContainer}>
-          <View style={styles.photoWrapper}>
-            <Image
-              source={{ uri: currentUser?.photos?.[0] || 'https://picsum.photos/seed/you/200/200' }}
-              style={styles.photo}
-            />
-          </View>
-          <View style={styles.heartContainer}>
-            <Text style={styles.heart}>❤️</Text>
-          </View>
-          <View style={styles.photoWrapper}>
-            <Image
-              source={{ uri: otherUser.photos[0] || 'https://picsum.photos/seed/them/200/200' }}
-              style={styles.photo}
-            />
-          </View>
+          <Animated.View
+            style={[
+              styles.photoWrapper,
+              { transform: [{ translateX: photo1Anim }] },
+            ]}
+          >
+            <LinearGradient
+              colors={colors.gradientPrimary as [string, string, ...string[]]}
+              style={styles.photoBorder}
+            >
+              <View style={styles.photoInner}>
+                <Image
+                  source={{ uri: currentUser?.photos?.[0] || 'https://picsum.photos/seed/you/200/200' }}
+                  style={styles.photo}
+                />
+              </View>
+            </LinearGradient>
+            <Text style={styles.photoLabel}>You</Text>
+          </Animated.View>
+
+          <Animated.View
+            style={[
+              styles.heartContainer,
+              {
+                transform: [
+                  { scale: Animated.multiply(heartScale, heartPulse) },
+                ],
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={colors.gradientWarm as [string, string, ...string[]]}
+              style={styles.heartBg}
+            >
+              <Text style={styles.heart}>❤️</Text>
+            </LinearGradient>
+          </Animated.View>
+
+          <Animated.View
+            style={[
+              styles.photoWrapper,
+              { transform: [{ translateX: photo2Anim }] },
+            ]}
+          >
+            <LinearGradient
+              colors={colors.gradientSecondary as [string, string, ...string[]]}
+              style={styles.photoBorder}
+            >
+              <View style={styles.photoInner}>
+                <Image
+                  source={{ uri: otherUser.photos[0] || 'https://picsum.photos/seed/them/200/200' }}
+                  style={styles.photo}
+                />
+              </View>
+            </LinearGradient>
+            <Text style={styles.photoLabel}>{otherUser.name}</Text>
+          </Animated.View>
         </View>
 
-        <Text style={styles.matchSubtitle}>
-          You and {otherUser.name} liked each other!
-        </Text>
+        {/* Text content */}
+        <Animated.View style={[styles.textContainer, { opacity: textOpacity }]}>
+          <Text style={styles.matchSubtitle}>
+            You and {otherUser.name} liked each other!
+          </Text>
 
-        <Text style={styles.noTextMessage}>
-          Skip the texting — let's get you talking!
-        </Text>
+          <View style={styles.noTextBadge}>
+            <LinearGradient
+              colors={[colors.glassBg, 'transparent']}
+              style={styles.noTextBadgeGradient}
+            >
+              <Text style={styles.noTextIcon}>🎙️</Text>
+              <Text style={styles.noTextMessage}>
+                Skip the texting — let's get you talking!
+              </Text>
+            </LinearGradient>
+          </View>
+        </Animated.View>
       </Animated.View>
 
-      {/* Action Button */}
-      <Animated.View style={[styles.actionContainer, { opacity: fadeAnim }]}>
-        <TouchableOpacity style={styles.scheduleButton} onPress={handleScheduleCall}>
-          <Text style={styles.scheduleButtonText}>Schedule a Call</Text>
+      {/* Action buttons */}
+      <Animated.View
+        style={[
+          styles.actionContainer,
+          {
+            opacity: buttonOpacity,
+            transform: [{ translateY: buttonSlide }],
+          },
+        ]}
+      >
+        <TouchableOpacity
+          style={styles.scheduleButton}
+          onPress={handleScheduleCall}
+          activeOpacity={0.9}
+        >
+          <LinearGradient
+            colors={colors.gradientPrimary as [string, string, ...string[]]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.scheduleButtonGradient}
+          >
+            <Text style={styles.scheduleButtonIcon}>📞</Text>
+            <Text style={styles.scheduleButtonText}>Schedule a Call</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.laterButton}
-          onPress={() => router.replace('/discovery')}
-        >
+        <TouchableOpacity style={styles.laterButton} onPress={handleLater}>
           <Text style={styles.laterButtonText}>Maybe Later</Text>
         </TouchableOpacity>
       </Animated.View>
@@ -158,47 +461,83 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.lg,
   },
-  celebrationBg: {
+  errorText: {
+    fontSize: typography.sizes.lg,
+    color: colors.error,
+    marginBottom: spacing.lg,
+  },
+  errorButton: {
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.md,
+  },
+  errorButtonText: {
+    fontSize: typography.sizes.md,
+    color: colors.text,
+  },
+  glowOrb: {
+    position: 'absolute',
+    borderRadius: 999,
+  },
+  glowOrb1: {
+    width: 300,
+    height: 300,
+    backgroundColor: colors.primary,
+    top: height * 0.1,
+    left: -100,
+    opacity: 0.15,
+  },
+  glowOrb2: {
+    width: 250,
+    height: 250,
+    backgroundColor: colors.secondary,
+    bottom: height * 0.15,
+    right: -80,
+    opacity: 0.15,
+  },
+  particle: {
     position: 'absolute',
     top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  emoji: {
-    position: 'absolute',
-    fontSize: 60,
-    top: '10%',
-    left: '10%',
-    opacity: 0.3,
-  },
-  emoji2: {
-    position: 'absolute',
-    fontSize: 40,
-    top: '20%',
-    right: '15%',
-    opacity: 0.3,
-  },
-  emoji3: {
-    position: 'absolute',
-    fontSize: 50,
-    bottom: '25%',
-    left: '20%',
-    opacity: 0.3,
   },
   content: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: spacing.lg,
   },
   matchTitle: {
-    fontSize: typography.sizes.hero,
-    fontWeight: typography.weights.bold,
-    color: colors.primary,
-    marginBottom: spacing.xl,
+    fontSize: typography.sizes.display,
+    fontWeight: typography.weights.heavy,
+    color: colors.text,
     textAlign: 'center',
+    textShadowColor: colors.primary,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
+  },
+  titleUnderline: {
+    height: 4,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xxl,
+    alignSelf: 'center',
+    width: 120,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  underlineGradient: {
+    flex: 1,
   },
   photosContainer: {
     flexDirection: 'row',
@@ -206,54 +545,98 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   photoWrapper: {
-    width: 120,
-    height: 120,
-    borderRadius: borderRadius.full,
+    alignItems: 'center',
+  },
+  photoBorder: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    padding: 4,
+    ...shadows.glow(colors.primary),
+  },
+  photoInner: {
+    flex: 1,
+    borderRadius: 63,
     overflow: 'hidden',
-    borderWidth: 4,
-    borderColor: colors.primary,
+    backgroundColor: colors.surface,
   },
   photo: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
   },
+  photoLabel: {
+    marginTop: spacing.sm,
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.semibold,
+    color: colors.text,
+  },
   heartContainer: {
-    marginHorizontal: -spacing.md,
+    marginHorizontal: -spacing.lg,
     zIndex: 1,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.full,
-    padding: spacing.sm,
+  },
+  heartBg: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.glow(colors.primary),
   },
   heart: {
-    fontSize: 40,
+    fontSize: 30,
+  },
+  textContainer: {
+    alignItems: 'center',
   },
   matchSubtitle: {
     fontSize: typography.sizes.xl,
     fontWeight: typography.weights.semibold,
     color: colors.text,
     textAlign: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  noTextBadge: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.glassStroke,
+  },
+  noTextBadgeGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  noTextIcon: {
+    fontSize: 20,
+    marginRight: spacing.sm,
   },
   noTextMessage: {
     fontSize: typography.sizes.md,
     color: colors.textSecondary,
-    textAlign: 'center',
     fontStyle: 'italic',
   },
   actionContainer: {
-    position: 'absolute',
-    bottom: spacing.xxl,
-    left: spacing.lg,
-    right: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   scheduleButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
     marginBottom: spacing.md,
+    ...shadows.lg,
+  },
+  scheduleButtonGradient: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+  },
+  scheduleButtonIcon: {
+    fontSize: 20,
+    marginRight: spacing.sm,
   },
   scheduleButtonText: {
     fontSize: typography.sizes.lg,
@@ -266,21 +649,6 @@ const styles = StyleSheet.create({
   },
   laterButtonText: {
     fontSize: typography.sizes.md,
-    color: colors.textSecondary,
-  },
-  errorText: {
-    fontSize: typography.sizes.lg,
-    color: colors.error,
-    marginBottom: spacing.lg,
-  },
-  button: {
-    backgroundColor: colors.surface,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.md,
-  },
-  buttonText: {
-    fontSize: typography.sizes.md,
-    color: colors.text,
+    color: colors.textMuted,
   },
 });

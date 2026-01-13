@@ -8,12 +8,17 @@ import {
   SafeAreaView,
   Animated,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SchedulingService, MatchingService } from '../../../src/services';
 import { useAppStore } from '../../../src/store';
-import { colors, spacing, borderRadius, typography } from '../../../src/constants/theme';
+import { colors, spacing, borderRadius, typography, shadows } from '../../../src/constants/theme';
 import { CallEvent, UserProfile } from '../../../src/types';
+
+const { width, height } = Dimensions.get('window');
 
 export default function InCallScreen() {
   const { callEventId } = useLocalSearchParams<{ callEventId: string }>();
@@ -27,7 +32,87 @@ export default function InCallScreen() {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
 
+  // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const liveGlowAnim = useRef(new Animated.Value(0.5)).current;
+  const avatarPulseAnim = useRef(new Animated.Value(1)).current;
+  const waveAnim1 = useRef(new Animated.Value(0)).current;
+  const waveAnim2 = useRef(new Animated.Value(0)).current;
+  const waveAnim3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Live indicator pulse
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.15,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Live glow
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(liveGlowAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(liveGlowAnim, {
+          toValue: 0.5,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Avatar breathing animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(avatarPulseAnim, {
+          toValue: 1.03,
+          duration: 2500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(avatarPulseAnim, {
+          toValue: 1,
+          duration: 2500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Audio wave animations (staggered)
+    const startWaveAnimation = (anim: Animated.Value, delay: number) => {
+      setTimeout(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(anim, {
+              toValue: 1,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+            Animated.timing(anim, {
+              toValue: 0,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      }, delay);
+    };
+
+    startWaveAnimation(waveAnim1, 0);
+    startWaveAnimation(waveAnim2, 200);
+    startWaveAnimation(waveAnim3, 400);
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -55,31 +140,18 @@ export default function InCallScreen() {
     loadData();
   }, [callEventId]);
 
-  // Pulse animation for the call indicator
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.2,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, []);
-
   // Countdown timer
   useEffect(() => {
     if (timeRemaining <= 0) {
       handleEndCall();
       return;
+    }
+
+    // Haptic feedback at critical moments
+    if (timeRemaining === 60) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    } else if (timeRemaining === 10) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
 
     const timer = setInterval(() => {
@@ -96,6 +168,7 @@ export default function InCallScreen() {
   };
 
   const handleEndCall = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     if (callEvent) {
       await SchedulingService.updateCallState(callEvent.id, 'completed');
       setActiveCallEvent(null);
@@ -103,108 +176,244 @@ export default function InCallScreen() {
     }
   };
 
+  const handleToggleMute = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsMuted(!isMuted);
+  };
+
+  const handleToggleVideo = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsVideoOff(!isVideoOff);
+  };
+
+  const wave1Scale = waveAnim1.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.5],
+  });
+  const wave1Opacity = waveAnim1.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.6, 0],
+  });
+  const wave2Scale = waveAnim2.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.5],
+  });
+  const wave2Opacity = waveAnim2.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.4, 0],
+  });
+  const wave3Scale = waveAnim3.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.5],
+  });
+  const wave3Opacity = waveAnim3.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.2, 0],
+  });
+
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, styles.centered]}>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[colors.background, colors.backgroundElevated]}
+          style={StyleSheet.absoluteFill}
+        />
         <ActivityIndicator size="large" color={colors.primary} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (!callEvent || !otherUser) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.errorText}>Call not found</Text>
-      </SafeAreaView>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[colors.background, colors.backgroundElevated]}
+          style={StyleSheet.absoluteFill}
+        />
+        <SafeAreaView style={styles.errorContainer}>
+          <Text style={styles.errorText}>Call not found</Text>
+        </SafeAreaView>
+      </View>
     );
   }
 
   const isVideo = callEvent.callType === 'video';
+  const isLowTime = timeRemaining < 60;
 
   return (
     <View style={styles.container}>
-      {/* Simulated Video Background */}
+      {/* Video Background */}
       {isVideo && (
         <Image
           source={{ uri: otherUser.photos[0] || 'https://picsum.photos/400/600' }}
           style={styles.videoBackground}
-          blurRadius={isVideoOff ? 20 : 0}
+          blurRadius={isVideoOff ? 30 : 0}
         />
       )}
 
-      {/* Overlay */}
-      <View style={[styles.overlay, !isVideo && styles.audioOverlay]}>
-        <SafeAreaView style={styles.safeArea}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Animated.View
-              style={[
-                styles.liveIndicator,
-                { transform: [{ scale: pulseAnim }] },
-              ]}
+      {/* Gradient Overlay */}
+      <LinearGradient
+        colors={isVideo
+          ? ['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.1)', 'rgba(0,0,0,0.5)']
+          : [colors.background, colors.backgroundElevated, colors.background]
+        }
+        style={StyleSheet.absoluteFill}
+      />
+
+      <SafeAreaView style={styles.safeArea}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Animated.View
+            style={[
+              styles.liveIndicator,
+              { transform: [{ scale: pulseAnim }] },
+            ]}
+          >
+            <LinearGradient
+              colors={['#FF3B3B', '#EF4444']}
+              style={styles.liveIndicatorBg}
             >
-              <View style={styles.liveDot} />
+              <Animated.View style={[styles.liveDot, { opacity: liveGlowAnim }]} />
               <Text style={styles.liveText}>LIVE</Text>
-            </Animated.View>
-            
-            <View style={styles.timerContainer}>
+            </LinearGradient>
+          </Animated.View>
+
+          <View style={styles.timerContainer}>
+            <LinearGradient
+              colors={isLowTime
+                ? ['rgba(239, 68, 68, 0.2)', 'rgba(239, 68, 68, 0.1)']
+                : ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']
+              }
+              style={styles.timerBg}
+            >
               <Text style={styles.timerLabel}>Time Remaining</Text>
-              <Text style={[styles.timer, timeRemaining < 60 && styles.timerLow]}>
+              <Text style={[styles.timer, isLowTime && styles.timerLow]}>
                 {formatTime(timeRemaining)}
               </Text>
-            </View>
+            </LinearGradient>
           </View>
+        </View>
 
-          {/* Center Content */}
-          <View style={styles.centerContent}>
-            {!isVideo && (
-              <View style={styles.audioUserContainer}>
-                <Image
-                  source={{ uri: otherUser.photos[0] || 'https://picsum.photos/200/200' }}
-                  style={styles.audioAvatar}
+        {/* Center Content */}
+        <View style={styles.centerContent}>
+          {!isVideo && (
+            <View style={styles.audioUserContainer}>
+              {/* Sound waves */}
+              <View style={styles.soundWavesContainer}>
+                <Animated.View
+                  style={[
+                    styles.soundWave,
+                    { transform: [{ scale: wave1Scale }], opacity: wave1Opacity },
+                  ]}
                 />
-                <Text style={styles.audioUserName}>{otherUser.name}</Text>
-                <Text style={styles.audioStatus}>Audio call in progress...</Text>
+                <Animated.View
+                  style={[
+                    styles.soundWave,
+                    styles.soundWave2,
+                    { transform: [{ scale: wave2Scale }], opacity: wave2Opacity },
+                  ]}
+                />
+                <Animated.View
+                  style={[
+                    styles.soundWave,
+                    styles.soundWave3,
+                    { transform: [{ scale: wave3Scale }], opacity: wave3Opacity },
+                  ]}
+                />
               </View>
-            )}
-            
-            {isVideo && (
-              <View style={styles.videoNameContainer}>
-                <Text style={styles.videoUserName}>{otherUser.name}</Text>
+
+              <Animated.View style={[styles.avatarWrapper, { transform: [{ scale: avatarPulseAnim }] }]}>
+                <LinearGradient
+                  colors={colors.gradientSuccess as [string, string]}
+                  style={styles.avatarBorder}
+                >
+                  <Image
+                    source={{ uri: otherUser.photos[0] || 'https://picsum.photos/200/200' }}
+                    style={styles.audioAvatar}
+                  />
+                </LinearGradient>
+              </Animated.View>
+
+              <Text style={styles.audioUserName}>{otherUser.name}</Text>
+              <View style={styles.audioStatusContainer}>
+                <View style={styles.statusDot} />
+                <Text style={styles.audioStatus}>Audio call in progress</Text>
               </View>
-            )}
-          </View>
+            </View>
+          )}
 
-          {/* Controls */}
-          <View style={styles.controls}>
-            <TouchableOpacity
-              style={[styles.controlButton, isMuted && styles.controlButtonActive]}
-              onPress={() => setIsMuted(!isMuted)}
-            >
-              <Text style={styles.controlIcon}>{isMuted ? '🔇' : '🎤'}</Text>
-              <Text style={styles.controlLabel}>{isMuted ? 'Unmute' : 'Mute'}</Text>
-            </TouchableOpacity>
-
-            {isVideo && (
-              <TouchableOpacity
-                style={[styles.controlButton, isVideoOff && styles.controlButtonActive]}
-                onPress={() => setIsVideoOff(!isVideoOff)}
+          {isVideo && (
+            <View style={styles.videoNameContainer}>
+              <LinearGradient
+                colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.4)']}
+                style={styles.videoNameBg}
               >
-                <Text style={styles.controlIcon}>{isVideoOff ? '📵' : '📹'}</Text>
-                <Text style={styles.controlLabel}>{isVideoOff ? 'Video On' : 'Video Off'}</Text>
-              </TouchableOpacity>
-            )}
+                <Text style={styles.videoUserName}>{otherUser.name}</Text>
+              </LinearGradient>
+            </View>
+          )}
+        </View>
 
-            <TouchableOpacity
-              style={[styles.controlButton, styles.endCallButton]}
-              onPress={handleEndCall}
-            >
-              <Text style={styles.controlIcon}>📞</Text>
-              <Text style={styles.controlLabel}>End</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </View>
+        {/* Controls */}
+        <View style={styles.controlsContainer}>
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.3)']}
+            style={styles.controlsGradient}
+          >
+            <View style={styles.controls}>
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={handleToggleMute}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={isMuted
+                    ? [colors.warning, colors.warningLight]
+                    : [colors.surface + 'E0', colors.surfaceLight + 'E0']
+                  }
+                  style={styles.controlButtonGradient}
+                >
+                  <Text style={styles.controlIcon}>{isMuted ? '🔇' : '🎤'}</Text>
+                </LinearGradient>
+                <Text style={styles.controlLabel}>{isMuted ? 'Unmute' : 'Mute'}</Text>
+              </TouchableOpacity>
+
+              {isVideo && (
+                <TouchableOpacity
+                  style={styles.controlButton}
+                  onPress={handleToggleVideo}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={isVideoOff
+                      ? [colors.warning, colors.warningLight]
+                      : [colors.surface + 'E0', colors.surfaceLight + 'E0']
+                    }
+                    style={styles.controlButtonGradient}
+                  >
+                    <Text style={styles.controlIcon}>{isVideoOff ? '📵' : '📹'}</Text>
+                  </LinearGradient>
+                  <Text style={styles.controlLabel}>{isVideoOff ? 'Video On' : 'Video Off'}</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={handleEndCall}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={[colors.error, colors.errorLight]}
+                  style={[styles.controlButtonGradient, styles.endCallButtonGradient]}
+                >
+                  <Text style={styles.controlIcon}>📞</Text>
+                </LinearGradient>
+                <Text style={[styles.controlLabel, styles.endCallLabel]}>End</Text>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
@@ -213,10 +422,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  centered: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  safeArea: {
+    flex: 1,
+    width: '100%',
   },
   videoBackground: {
     position: 'absolute',
@@ -226,51 +437,56 @@ const styles = StyleSheet.create({
     bottom: 0,
     resizeMode: 'cover',
   },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-  },
-  audioOverlay: {
-    backgroundColor: colors.backgroundSecondary,
-  },
-  safeArea: {
-    flex: 1,
-  },
+
+  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     padding: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.md,
   },
   liveIndicator: {
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+    ...shadows.glow('#FF3B3B'),
+  },
+  liveIndicatorBg: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.error,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
+    gap: spacing.xs,
   },
   liveDot: {
     width: 8,
     height: 8,
-    borderRadius: borderRadius.full,
+    borderRadius: 4,
     backgroundColor: colors.text,
-    marginRight: spacing.xs,
   },
   liveText: {
     fontSize: typography.sizes.sm,
     fontWeight: typography.weights.bold,
     color: colors.text,
-    letterSpacing: 1,
+    letterSpacing: 1.5,
   },
   timerContainer: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  timerBg: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
     alignItems: 'flex-end',
+    borderWidth: 1,
+    borderColor: colors.glassStroke,
   },
   timerLabel: {
     fontSize: typography.sizes.xs,
     color: colors.text,
-    opacity: 0.7,
+    opacity: 0.8,
   },
   timer: {
     fontSize: typography.sizes.xxl,
@@ -280,6 +496,8 @@ const styles = StyleSheet.create({
   timerLow: {
     color: colors.error,
   },
+
+  // Center Content
   centerContent: {
     flex: 1,
     justifyContent: 'center',
@@ -288,19 +506,64 @@ const styles = StyleSheet.create({
   audioUserContainer: {
     alignItems: 'center',
   },
+  soundWavesContainer: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  soundWave: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    borderWidth: 3,
+    borderColor: colors.success,
+  },
+  soundWave2: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    borderWidth: 2,
+  },
+  soundWave3: {
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    borderWidth: 1,
+  },
+  avatarWrapper: {
+    marginBottom: spacing.lg,
+  },
+  avatarBorder: {
+    padding: 4,
+    borderRadius: borderRadius.full,
+    ...shadows.glow(colors.success),
+  },
   audioAvatar: {
     width: 150,
     height: 150,
-    borderRadius: borderRadius.full,
-    borderWidth: 4,
-    borderColor: colors.success,
-    marginBottom: spacing.lg,
+    borderRadius: 75,
+    borderWidth: 3,
+    borderColor: colors.background,
   },
   audioUserName: {
     fontSize: typography.sizes.xxl,
     fontWeight: typography.weights.bold,
     color: colors.text,
     marginBottom: spacing.sm,
+  },
+  audioStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.success,
   },
   audioStatus: {
     fontSize: typography.sizes.md,
@@ -310,49 +573,80 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: spacing.xl,
     left: spacing.lg,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  videoNameBg: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
   },
   videoUserName: {
     fontSize: typography.sizes.lg,
     fontWeight: typography.weights.semibold,
     color: colors.text,
   },
+
+  // Controls
+  controlsContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  controlsGradient: {
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.xxxl,
+    paddingHorizontal: spacing.lg,
+  },
   controls: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: spacing.lg,
-    paddingBottom: spacing.xxl,
-    paddingHorizontal: spacing.lg,
+    gap: spacing.xl,
   },
   controlButton: {
-    width: 70,
-    height: 70,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
     alignItems: 'center',
   },
-  controlButtonActive: {
-    backgroundColor: colors.warning,
+  controlButtonGradient: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.glassStroke,
+    ...shadows.md,
   },
-  endCallButton: {
-    backgroundColor: colors.error,
+  endCallButtonGradient: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderColor: 'transparent',
+    ...shadows.glow(colors.error),
   },
   controlIcon: {
-    fontSize: 24,
+    fontSize: 28,
   },
   controlLabel: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.sizes.sm,
     color: colors.text,
-    marginTop: spacing.xs,
+    fontWeight: typography.weights.medium,
+  },
+  endCallLabel: {
+    color: colors.error,
+  },
+
+  // Error State
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
   },
   errorText: {
     fontSize: typography.sizes.lg,
     color: colors.error,
     textAlign: 'center',
-    marginTop: spacing.xxl,
   },
 });

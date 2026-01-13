@@ -9,10 +9,18 @@ export type CallState = 'scheduled' | 'live' | 'completed' | 'missed' | 'cancele
 export type FeedbackRating = 'interested' | 'not_interested';
 export type ReportCategory = 'inappropriate' | 'fake' | 'harassment' | 'spam' | 'other';
 
+// New enums for matching
+export type DbGender = 'man' | 'woman' | 'non_binary' | 'other';
+export type DbSexuality = 'straight' | 'gay' | 'lesbian' | 'bisexual' | 'pansexual' | 'queer' | 'asexual' | 'other';
+export type DbShowMePreference = 'men' | 'women' | 'everyone';
+
 export interface DbProfile {
   id: string;
   name: string;
-  age: number;
+  birthday: string; // DATE in format YYYY-MM-DD
+  gender: DbGender;
+  sexuality: DbSexuality;
+  show_me: DbShowMePreference;
   prompts: string[];
   photos: string[];
   bio: string | null;
@@ -145,6 +153,9 @@ export interface Database {
       call_state: CallState;
       feedback_rating: FeedbackRating;
       report_category: ReportCategory;
+      gender: DbGender;
+      sexuality: DbSexuality;
+      show_me_preference: DbShowMePreference;
     };
   };
 }

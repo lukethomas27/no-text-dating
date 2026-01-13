@@ -12,6 +12,9 @@ CREATE TYPE call_type AS ENUM ('audio', 'video');
 CREATE TYPE call_state AS ENUM ('scheduled', 'live', 'completed', 'missed', 'canceled');
 CREATE TYPE feedback_rating AS ENUM ('interested', 'not_interested');
 CREATE TYPE report_category AS ENUM ('inappropriate', 'fake', 'harassment', 'spam', 'other');
+CREATE TYPE gender AS ENUM ('man', 'woman', 'non_binary', 'other');
+CREATE TYPE sexuality AS ENUM ('straight', 'gay', 'lesbian', 'bisexual', 'pansexual', 'queer', 'asexual', 'other');
+CREATE TYPE show_me_preference AS ENUM ('men', 'women', 'everyone');
 
 -- ============================================
 -- TABLES
@@ -21,7 +24,10 @@ CREATE TYPE report_category AS ENUM ('inappropriate', 'fake', 'harassment', 'spa
 CREATE TABLE profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
-    age INTEGER NOT NULL CHECK (age >= 18 AND age <= 120),
+    birthday DATE NOT NULL CHECK (birthday <= CURRENT_DATE - INTERVAL '18 years'),
+    gender gender NOT NULL,
+    sexuality sexuality NOT NULL,
+    show_me show_me_preference NOT NULL DEFAULT 'everyone',
     prompts TEXT[] NOT NULL DEFAULT '{"", "", ""}' CHECK (array_length(prompts, 1) = 3),
     photos TEXT[] NOT NULL DEFAULT '{}',
     bio TEXT,

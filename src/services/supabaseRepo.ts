@@ -31,7 +31,10 @@ import {
 const toUserProfile = (db: DbProfile): UserProfile => ({
   id: db.id,
   name: db.name,
-  age: db.age,
+  birthday: db.birthday,
+  gender: db.gender,
+  sexuality: db.sexuality,
+  showMe: db.show_me,
   prompts: db.prompts as [string, string, string],
   photos: db.photos,
   bio: db.bio ?? undefined,
@@ -189,7 +192,10 @@ export const createProfile = async (
     .insert({
       id: userId,
       name: profile.name,
-      age: profile.age,
+      birthday: profile.birthday,
+      gender: profile.gender,
+      sexuality: profile.sexuality,
+      show_me: profile.showMe,
       prompts: profile.prompts,
       photos: profile.photos,
       bio: profile.bio ?? null,
@@ -207,15 +213,20 @@ export const updateProfile = async (
   const userId = await getCurrentUserId();
   if (!userId) return undefined;
 
+  // Build update object only with provided fields
+  const updateData: Record<string, unknown> = {};
+  if (updates.name !== undefined) updateData.name = updates.name;
+  if (updates.birthday !== undefined) updateData.birthday = updates.birthday;
+  if (updates.gender !== undefined) updateData.gender = updates.gender;
+  if (updates.sexuality !== undefined) updateData.sexuality = updates.sexuality;
+  if (updates.showMe !== undefined) updateData.show_me = updates.showMe;
+  if (updates.prompts !== undefined) updateData.prompts = updates.prompts;
+  if (updates.photos !== undefined) updateData.photos = updates.photos;
+  if (updates.bio !== undefined) updateData.bio = updates.bio ?? null;
+
   const { data, error } = await supabase
     .from('profiles')
-    .update({
-      name: updates.name,
-      age: updates.age,
-      prompts: updates.prompts,
-      photos: updates.photos,
-      bio: updates.bio ?? null,
-    })
+    .update(updateData)
     .eq('id', userId)
     .select()
     .single();

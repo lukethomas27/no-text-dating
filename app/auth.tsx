@@ -1,19 +1,27 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StyleSheet,
-  SafeAreaView,
   ActivityIndicator,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
-  ScrollView,
+  Animated,
+  Dimensions,
+  InputAccessoryView,
+  BackHandler,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useAppStore } from '../src/store';
-import { colors, spacing, borderRadius, typography } from '../src/constants/theme';
+import { colors, spacing, borderRadius, typography, shadows } from '../src/constants/theme';
+
+const { width, height } = Dimensions.get('window');
 
 type AuthStep = 'phone' | 'otp' | 'profile';
 
@@ -26,52 +34,108 @@ export default function AuthScreen() {
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [error, setError] = useState('');
-  const [isNewUser, setIsNewUser] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const formatPhoneDisplay = (value: string) => {
-    // Remove all non-digits
-    const digits = value.replace(/\D/g, '');
+  // Animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const logoScale = useRef(new Animated.Value(0.8)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
-    // Format as (XXX) XXX-XXXX for US numbers
-    if (digits.length <= 3) {
-      return digits;
-    } else if (digits.length <= 6) {
-      return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-    } else {
-      return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
-    }
+  useEffect(() => {
+    // Entrance animation
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(logoScale, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  useEffect(() => {
+    // Progress animation based on step
+    const progress = step === 'phone' ? 0 : step === 'otp' ? 0.5 : 1;
+    Animated.spring(progressAnim, {
+      toValue: progress,
+      tension: 50,
+      friction: 10,
+      useNativeDriver: false,
+    }).start();
+
+    // Animate content change
+    fadeAnim.setValue(0);
+    slideAnim.setValue(30);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 10,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [step]);
+
+  // Handle Android back button - prevent GO_BACK error on auth screen
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // If on OTP step, go back to phone step
+      if (step === 'otp') {
+        handleBack();
+        return true;
+      }
+      // On phone step, minimize app instead of crashing
+      return false;
+    });
+
+    return () => backHandler.remove();
+  }, [step]);
+
+  // Input accessory view ID for keyboard toolbar
+  const inputAccessoryViewID = 'auth-keyboard-toolbar';
+
+  const formatPhoneDisplay = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
   };
 
   const handlePhoneChange = (value: string) => {
-    // Store only digits
     const digits = value.replace(/\D/g, '').slice(0, 10);
     setPhone(digits);
   };
 
-  const getFullPhoneNumber = () => {
-    // Add US country code
-    return `+1${phone}`;
-  };
+  const getFullPhoneNumber = () => `+1${phone}`;
 
   const handleSendOtp = async () => {
     if (phone.length !== 10) {
       setError('Please enter a valid 10-digit phone number');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
     setIsLoading(true);
     try {
       setError('');
-      console.log('Sending OTP to:', getFullPhoneNumber());
-      const result = await sendOtp(getFullPhoneNumber());
-      console.log('OTP sent successfully:', result);
-      setIsNewUser(result.isNewUser);
+      await sendOtp(getFullPhoneNumber());
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setStep('otp');
     } catch (err: any) {
-      console.error('OTP send error:', err);
-      const errorMessage = err?.message || err?.error_description || 'Failed to send verification code';
+      const errorMessage = err?.message || 'Failed to send verification code';
       setError(errorMessage);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsLoading(false);
     }
@@ -80,6 +144,7 @@ export default function AuthScreen() {
   const handleVerifyOtp = async () => {
     if (otp.length !== 6) {
       setError('Please enter the 6-digit code');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
@@ -87,6 +152,7 @@ export default function AuthScreen() {
     try {
       setError('');
       const result = await verifyOtp(getFullPhoneNumber(), otp);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       if (result.needsProfile) {
         setStep('profile');
@@ -95,6 +161,7 @@ export default function AuthScreen() {
       }
     } catch (err: any) {
       setError(err.message || 'Invalid verification code');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsLoading(false);
     }
@@ -103,12 +170,14 @@ export default function AuthScreen() {
   const handleCompleteProfile = async () => {
     if (!name.trim() || !age.trim()) {
       setError('Please fill in all fields');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
     const ageNum = parseInt(age, 10);
     if (isNaN(ageNum) || ageNum < 18 || ageNum > 120) {
       setError('Please enter a valid age (18+)');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
@@ -116,15 +185,18 @@ export default function AuthScreen() {
     try {
       setError('');
       await completeProfile(name.trim(), ageNum);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace('/profile/edit');
     } catch (err: any) {
       setError(err.message || 'Failed to create profile');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleBack = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setError('');
     if (step === 'otp') {
       setStep('phone');
@@ -132,11 +204,24 @@ export default function AuthScreen() {
     }
   };
 
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
+
   const renderPhoneStep = () => (
-    <>
-      <Text style={styles.sectionTitle}>Enter your phone number</Text>
-      <Text style={styles.sectionSubtitle}>
-        We'll send you a verification code
+    <Animated.View
+      style={[
+        styles.stepContainer,
+        {
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        },
+      ]}
+    >
+      <Text style={styles.stepTitle}>What's your number?</Text>
+      <Text style={styles.stepSubtitle}>
+        We'll text you a code to verify it's really you
       </Text>
 
       {error ? (
@@ -145,7 +230,7 @@ export default function AuthScreen() {
         </View>
       ) : null}
 
-      <View style={styles.phoneInputContainer}>
+      <View style={styles.phoneInputWrapper}>
         <View style={styles.countryCode}>
           <Text style={styles.countryCodeText}>+1</Text>
         </View>
@@ -156,36 +241,55 @@ export default function AuthScreen() {
           value={formatPhoneDisplay(phone)}
           onChangeText={handlePhoneChange}
           keyboardType="phone-pad"
+          inputAccessoryViewID={inputAccessoryViewID}
           autoFocus
         />
       </View>
 
       <TouchableOpacity
-        style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
+        style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
         onPress={handleSendOtp}
         disabled={isLoading}
+        activeOpacity={0.8}
       >
-        {isLoading ? (
-          <ActivityIndicator color={colors.text} />
-        ) : (
-          <Text style={styles.submitButtonText}>Send Code</Text>
-        )}
+        <LinearGradient
+          colors={colors.gradientPrimary as [string, string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.buttonGradient}
+        >
+          {isLoading ? (
+            <ActivityIndicator color={colors.text} />
+          ) : (
+            <Text style={styles.buttonText}>Continue</Text>
+          )}
+        </LinearGradient>
       </TouchableOpacity>
 
       <Text style={styles.termsText}>
-        By continuing, you agree to our Terms of Service and Privacy Policy
+        By continuing, you agree to our{' '}
+        <Text style={styles.termsLink}>Terms</Text> and{' '}
+        <Text style={styles.termsLink}>Privacy Policy</Text>
       </Text>
-    </>
+    </Animated.View>
   );
 
   const renderOtpStep = () => (
-    <>
+    <Animated.View
+      style={[
+        styles.stepContainer,
+        {
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        },
+      ]}
+    >
       <TouchableOpacity style={styles.backButton} onPress={handleBack}>
         <Text style={styles.backButtonText}>← Back</Text>
       </TouchableOpacity>
 
-      <Text style={styles.sectionTitle}>Enter verification code</Text>
-      <Text style={styles.sectionSubtitle}>
+      <Text style={styles.stepTitle}>Enter the code</Text>
+      <Text style={styles.stepSubtitle}>
         Sent to {formatPhoneDisplay(phone)}
       </Text>
 
@@ -202,20 +306,29 @@ export default function AuthScreen() {
         value={otp}
         onChangeText={(text) => setOtp(text.replace(/\D/g, '').slice(0, 6))}
         keyboardType="number-pad"
+        inputAccessoryViewID={inputAccessoryViewID}
         autoFocus
         maxLength={6}
       />
 
       <TouchableOpacity
-        style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
+        style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
         onPress={handleVerifyOtp}
         disabled={isLoading}
+        activeOpacity={0.8}
       >
-        {isLoading ? (
-          <ActivityIndicator color={colors.text} />
-        ) : (
-          <Text style={styles.submitButtonText}>Verify</Text>
-        )}
+        <LinearGradient
+          colors={colors.gradientPrimary as [string, string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.buttonGradient}
+        >
+          {isLoading ? (
+            <ActivityIndicator color={colors.text} />
+          ) : (
+            <Text style={styles.buttonText}>Verify</Text>
+          )}
+        </LinearGradient>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -223,16 +336,24 @@ export default function AuthScreen() {
         onPress={handleSendOtp}
         disabled={isLoading}
       >
-        <Text style={styles.resendButtonText}>Resend code</Text>
+        <Text style={styles.resendText}>Didn't get the code? Resend</Text>
       </TouchableOpacity>
-    </>
+    </Animated.View>
   );
 
   const renderProfileStep = () => (
-    <>
-      <Text style={styles.sectionTitle}>Create your profile</Text>
-      <Text style={styles.sectionSubtitle}>
-        Tell us a bit about yourself
+    <Animated.View
+      style={[
+        styles.stepContainer,
+        {
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        },
+      ]}
+    >
+      <Text style={styles.stepTitle}>Let's meet you</Text>
+      <Text style={styles.stepSubtitle}>
+        Tell us a little about yourself
       </Text>
 
       {error ? (
@@ -241,63 +362,165 @@ export default function AuthScreen() {
         </View>
       ) : null}
 
-      <TextInput
-        style={styles.input}
-        placeholder="Your name"
-        placeholderTextColor={colors.textMuted}
-        value={name}
-        onChangeText={setName}
-        autoCapitalize="words"
-        autoFocus
-      />
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Your first name</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Enter your name"
+          placeholderTextColor={colors.textMuted}
+          value={name}
+          onChangeText={setName}
+          autoCapitalize="words"
+          returnKeyType="next"
+          blurOnSubmit={false}
+          autoFocus
+        />
+      </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Your age (18+)"
-        placeholderTextColor={colors.textMuted}
-        value={age}
-        onChangeText={setAge}
-        keyboardType="number-pad"
-        maxLength={3}
-      />
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Your age</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="18+"
+          placeholderTextColor={colors.textMuted}
+          value={age}
+          onChangeText={setAge}
+          keyboardType="number-pad"
+          inputAccessoryViewID={inputAccessoryViewID}
+          maxLength={3}
+        />
+      </View>
 
       <TouchableOpacity
-        style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
+        style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
         onPress={handleCompleteProfile}
         disabled={isLoading}
+        activeOpacity={0.8}
       >
-        {isLoading ? (
-          <ActivityIndicator color={colors.text} />
-        ) : (
-          <Text style={styles.submitButtonText}>Continue</Text>
-        )}
+        <LinearGradient
+          colors={colors.gradientPrimary as [string, string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.buttonGradient}
+        >
+          {isLoading ? (
+            <ActivityIndicator color={colors.text} />
+          ) : (
+            <Text style={styles.buttonText}>Continue</Text>
+          )}
+        </LinearGradient>
       </TouchableOpacity>
-    </>
+    </Animated.View>
   );
 
+  // Get the appropriate button action based on current step
+  const handleKeyboardAction = useCallback(() => {
+    Keyboard.dismiss();
+    if (step === 'phone') {
+      handleSendOtp();
+    } else if (step === 'otp') {
+      handleVerifyOtp();
+    } else if (step === 'profile') {
+      handleCompleteProfile();
+    }
+  }, [step, handleSendOtp, handleVerifyOtp, handleCompleteProfile]);
+
+  const getKeyboardButtonText = () => {
+    if (step === 'phone') return 'Continue';
+    if (step === 'otp') return 'Verify';
+    return 'Continue';
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.container}>
+        {/* Keyboard accessory toolbar for iOS number-pad */}
+        {Platform.OS === 'ios' && (
+          <InputAccessoryView nativeID={inputAccessoryViewID}>
+            <View style={styles.keyboardToolbar}>
+              <TouchableOpacity 
+                style={styles.keyboardDismissButton}
+                onPress={Keyboard.dismiss}
+              >
+                <Text style={styles.keyboardDismissText}>Done</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.keyboardActionButton}
+                onPress={handleKeyboardAction}
+                disabled={isLoading}
+              >
+                <Text style={styles.keyboardActionText}>{getKeyboardButtonText()}</Text>
+              </TouchableOpacity>
+            </View>
+          </InputAccessoryView>
+        )}
+        {/* Background gradient */}
+        <LinearGradient
+          colors={[colors.background, colors.backgroundElevated, colors.background]}
+          style={StyleSheet.absoluteFill}
+        />
+
+        {/* Decorative gradient orbs */}
+        <View style={styles.orbContainer}>
+          <LinearGradient
+            colors={['rgba(255, 107, 107, 0.15)', 'transparent']}
+            style={[styles.orb, styles.orbTopRight]}
+          />
+          <LinearGradient
+            colors={['rgba(139, 92, 246, 0.1)', 'transparent']}
+            style={[styles.orb, styles.orbBottomLeft]}
+          />
+        </View>
+
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
         >
-          <View style={styles.header}>
-            <Text style={styles.title}>No Text Dating</Text>
-            <Text style={styles.subtitle}>Skip the chat. Start talking.</Text>
+          {/* Header with logo */}
+          <Animated.View
+            style={[
+              styles.header,
+              { transform: [{ scale: logoScale }] },
+            ]}
+          >
+            <View style={styles.logoContainer}>
+              <LinearGradient
+                colors={colors.gradientPrimary as [string, string, string]}
+                style={styles.logoGradient}
+              >
+                <Text style={styles.logoIcon}>💬</Text>
+              </LinearGradient>
+            </View>
+            <Text style={styles.appName}>No Text Dating</Text>
+            <Text style={styles.tagline}>Skip the chat. Start talking.</Text>
+          </Animated.View>
+
+          {/* Progress indicator */}
+          <View style={styles.progressContainer}>
+            <View style={styles.progressTrack}>
+              <Animated.View
+                style={[
+                  styles.progressFill,
+                  { width: progressWidth },
+                ]}
+              />
+            </View>
+            <View style={styles.progressDots}>
+              <View style={[styles.dot, step !== 'phone' && styles.dotInactive]} />
+              <View style={[styles.dot, step === 'phone' && styles.dotInactive]} />
+              <View style={[styles.dot, step !== 'profile' && styles.dotInactive]} />
+            </View>
           </View>
 
-          <View style={styles.form}>
+          {/* Step content */}
+          <View style={styles.content}>
             {step === 'phone' && renderPhoneStep()}
             {step === 'otp' && renderOtpStep()}
             {step === 'profile' && renderProfileStep()}
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </KeyboardAvoidingView>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -309,107 +532,193 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
-    padding: spacing.lg,
+  orbContainer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  orb: {
+    position: 'absolute',
+    width: 400,
+    height: 400,
+    borderRadius: 200,
+  },
+  orbTopRight: {
+    top: -100,
+    right: -100,
+  },
+  orbBottomLeft: {
+    bottom: -150,
+    left: -150,
   },
   header: {
     alignItems: 'center',
-    marginTop: spacing.xxl,
+    paddingTop: height * 0.1,
+    paddingBottom: spacing.xl,
+  },
+  logoContainer: {
+    marginBottom: spacing.lg,
+  },
+  logoGradient: {
+    width: 80,
+    height: 80,
+    borderRadius: borderRadius.xl,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.lg,
+  },
+  logoIcon: {
+    fontSize: 36,
+  },
+  appName: {
+    fontSize: typography.sizes.xxxl,
+    fontWeight: typography.weights.bold,
+    color: colors.text,
+    letterSpacing: typography.letterSpacing.tight,
+  },
+  tagline: {
+    fontSize: typography.sizes.md,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  progressContainer: {
+    paddingHorizontal: spacing.xxl,
     marginBottom: spacing.xl,
   },
-  title: {
-    fontSize: typography.sizes.hero,
-    fontWeight: typography.weights.bold,
-    color: colors.primary,
-    marginBottom: spacing.sm,
+  progressTrack: {
+    height: 3,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
   },
-  subtitle: {
-    fontSize: typography.sizes.lg,
-    color: colors.textSecondary,
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
   },
-  form: {
+  progressDots: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  dotInactive: {
+    backgroundColor: colors.surfaceLight,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+  },
+  stepContainer: {
     flex: 1,
   },
-  sectionTitle: {
-    fontSize: typography.sizes.xl,
-    fontWeight: typography.weights.semibold,
+  stepTitle: {
+    fontSize: typography.sizes.xxl,
+    fontWeight: typography.weights.bold,
     color: colors.text,
     marginBottom: spacing.sm,
-    textAlign: 'center',
   },
-  sectionSubtitle: {
+  stepSubtitle: {
     fontSize: typography.sizes.md,
     color: colors.textSecondary,
     marginBottom: spacing.xl,
-    textAlign: 'center',
+    lineHeight: 22,
   },
   errorContainer: {
-    backgroundColor: colors.error + '20',
+    backgroundColor: colors.errorMuted,
     borderRadius: borderRadius.md,
     padding: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.error,
   },
   errorText: {
-    color: colors.error,
+    color: colors.errorLight,
     fontSize: typography.sizes.sm,
     textAlign: 'center',
   },
-  phoneInputContainer: {
+  phoneInputWrapper: {
     flexDirection: 'row',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
+    gap: spacing.sm,
   },
   countryCode: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginRight: spacing.sm,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.lg,
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.surfaceLight,
   },
   countryCodeText: {
-    fontSize: typography.sizes.md,
+    fontSize: typography.sizes.lg,
     color: colors.text,
     fontWeight: typography.weights.medium,
   },
   phoneInput: {
     flex: 1,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: typography.sizes.lg,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: typography.sizes.xl,
     color: colors.text,
     letterSpacing: 1,
+    borderWidth: 1,
+    borderColor: colors.surfaceLight,
   },
   otpInput: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    fontSize: typography.sizes.xxl,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xl,
+    fontSize: typography.sizes.hero,
     color: colors.text,
     textAlign: 'center',
-    letterSpacing: 8,
+    letterSpacing: 12,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.surfaceLight,
+    fontWeight: typography.weights.semibold,
+  },
+  inputGroup: {
     marginBottom: spacing.lg,
   },
-  input: {
+  inputLabel: {
+    fontSize: typography.sizes.sm,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+    fontWeight: typography.weights.medium,
+  },
+  textInput: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: typography.sizes.md,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: typography.sizes.lg,
     color: colors.text,
-    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.surfaceLight,
   },
-  submitButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+  primaryButton: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...shadows.md,
+  },
+  buttonGradient: {
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    marginTop: spacing.md,
+    justifyContent: 'center',
   },
-  submitButtonDisabled: {
-    backgroundColor: colors.surfaceLight,
+  buttonDisabled: {
+    opacity: 0.6,
   },
-  submitButtonText: {
-    fontSize: typography.sizes.md,
+  buttonText: {
+    fontSize: typography.sizes.lg,
     fontWeight: typography.weights.semibold,
     color: colors.text,
   },
@@ -420,20 +729,54 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     lineHeight: 18,
   },
+  termsLink: {
+    color: colors.primary,
+  },
   backButton: {
     marginBottom: spacing.lg,
+    alignSelf: 'flex-start',
   },
   backButtonText: {
     fontSize: typography.sizes.md,
-    color: colors.secondary,
+    color: colors.primary,
+    fontWeight: typography.weights.medium,
   },
   resendButton: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
+    marginTop: spacing.md,
   },
-  resendButtonText: {
+  resendText: {
     fontSize: typography.sizes.md,
-    color: colors.secondary,
-    fontWeight: typography.weights.medium,
+    color: colors.textSecondary,
+  },
+  keyboardToolbar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.surface,
+  },
+  keyboardDismissButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  keyboardDismissText: {
+    fontSize: typography.sizes.md,
+    color: colors.textSecondary,
+  },
+  keyboardActionButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+  },
+  keyboardActionText: {
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.semibold,
+    color: colors.text,
   },
 });

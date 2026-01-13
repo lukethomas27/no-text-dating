@@ -36,7 +36,8 @@
         {
           "photosPermission": "Allow $(PRODUCT_NAME) to access your photos for your dating profile."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ]
   }
 }

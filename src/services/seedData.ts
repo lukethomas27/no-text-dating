@@ -1,11 +1,21 @@
 import { UserProfile } from '../types';
 
+// Helper to create birthday from age
+const birthdayFromAge = (age: number): string => {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() - age);
+  return date.toISOString().split('T')[0];
+};
+
 // Seed data with 12 demo profiles using picsum.photos for placeholder images
 export const SEED_PROFILES: UserProfile[] = [
   {
     id: 'demo-alex',
     name: 'Alex',
-    age: 28,
+    birthday: birthdayFromAge(28),
+    gender: 'man',
+    sexuality: 'straight',
+    showMe: 'women',
     prompts: [
       "I'm happiest when I'm hiking with my dog",
       "My ideal first date: coffee and a walk in the park",
@@ -21,7 +31,10 @@ export const SEED_PROFILES: UserProfile[] = [
   {
     id: 'demo-jordan',
     name: 'Jordan',
-    age: 26,
+    birthday: birthdayFromAge(26),
+    gender: 'woman',
+    sexuality: 'bisexual',
+    showMe: 'everyone',
     prompts: [
       "Coffee snob, but in a friendly way ☕",
       "I'll always share my fries with you",
@@ -38,7 +51,10 @@ export const SEED_PROFILES: UserProfile[] = [
   {
     id: 'demo-taylor',
     name: 'Taylor',
-    age: 31,
+    birthday: birthdayFromAge(31),
+    gender: 'woman',
+    sexuality: 'straight',
+    showMe: 'men',
     prompts: [
       "Weekend plans: farmers market then brunch",
       "I'm the friend who always has snacks",
@@ -54,7 +70,10 @@ export const SEED_PROFILES: UserProfile[] = [
   {
     id: 'demo-morgan',
     name: 'Morgan',
-    age: 29,
+    birthday: birthdayFromAge(29),
+    gender: 'man',
+    sexuality: 'gay',
+    showMe: 'men',
     prompts: [
       "Music is my love language 🎵",
       "Always planning my next concert",
@@ -70,7 +89,10 @@ export const SEED_PROFILES: UserProfile[] = [
   {
     id: 'demo-casey',
     name: 'Casey',
-    age: 27,
+    birthday: birthdayFromAge(27),
+    gender: 'woman',
+    sexuality: 'lesbian',
+    showMe: 'women',
     prompts: [
       "Yoga in the morning, wine in the evening",
       "I believe in work-life balance",
@@ -85,7 +107,10 @@ export const SEED_PROFILES: UserProfile[] = [
   {
     id: 'demo-riley',
     name: 'Riley',
-    age: 30,
+    birthday: birthdayFromAge(30),
+    gender: 'man',
+    sexuality: 'straight',
+    showMe: 'women',
     prompts: [
       "Dog parent to a golden retriever 🐕",
       "Best conversation starter: pet pictures",
@@ -102,7 +127,10 @@ export const SEED_PROFILES: UserProfile[] = [
   {
     id: 'demo-quinn',
     name: 'Quinn',
-    age: 25,
+    birthday: birthdayFromAge(25),
+    gender: 'non_binary',
+    sexuality: 'pansexual',
+    showMe: 'everyone',
     prompts: [
       "Artist seeking another creative soul",
       "Museums are my happy place",
@@ -118,7 +146,10 @@ export const SEED_PROFILES: UserProfile[] = [
   {
     id: 'demo-avery',
     name: 'Avery',
-    age: 33,
+    birthday: birthdayFromAge(33),
+    gender: 'woman',
+    sexuality: 'straight',
+    showMe: 'men',
     prompts: [
       "Traveler with 30+ countries visited",
       "Always planning the next adventure",
@@ -134,7 +165,10 @@ export const SEED_PROFILES: UserProfile[] = [
   {
     id: 'demo-sam',
     name: 'Sam',
-    age: 28,
+    birthday: birthdayFromAge(28),
+    gender: 'man',
+    sexuality: 'bisexual',
+    showMe: 'everyone',
     prompts: [
       "Startup founder, eternal optimist",
       "I run on coffee and big ideas",
@@ -149,7 +183,10 @@ export const SEED_PROFILES: UserProfile[] = [
   {
     id: 'demo-jamie',
     name: 'Jamie',
-    age: 32,
+    birthday: birthdayFromAge(32),
+    gender: 'woman',
+    sexuality: 'straight',
+    showMe: 'men',
     prompts: [
       "Chef by profession, foodie by choice",
       "I'll cook you dinner on our first date",
@@ -165,7 +202,10 @@ export const SEED_PROFILES: UserProfile[] = [
   {
     id: 'demo-drew',
     name: 'Drew',
-    age: 29,
+    birthday: birthdayFromAge(29),
+    gender: 'man',
+    sexuality: 'straight',
+    showMe: 'women',
     prompts: [
       "Fitness enthusiast, not a gym bro",
       "I run marathons for fun (yes, really)",
@@ -182,7 +222,10 @@ export const SEED_PROFILES: UserProfile[] = [
   {
     id: 'demo-blake',
     name: 'Blake',
-    age: 27,
+    birthday: birthdayFromAge(27),
+    gender: 'man',
+    sexuality: 'queer',
+    showMe: 'everyone',
     prompts: [
       "Film buff with strong opinions",
       "Always down for movie nights",

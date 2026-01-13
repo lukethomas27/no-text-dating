@@ -1,6 +1,20 @@
 # No Text Dating
 
-A dating app MVP where the only post-match interaction is scheduling audio/video calls. No messaging, no texting — just real conversations.
+A premium dating app where the only post-match interaction is scheduling audio/video calls. No messaging, no texting — just real conversations.
+
+## Overview
+
+No Text Dating reimagines online dating by eliminating endless text conversations. When you match with someone, you schedule a call. This encourages authentic connections through real-time conversation rather than carefully crafted messages.
+
+### Key Features
+
+- Phone-based authentication with OTP verification
+- Swipe-based discovery with immersive profile cards
+- Match celebration with confetti animations
+- Audio and video call scheduling
+- Pre-call lobby with countdown timer
+- Simulated in-call experience
+- Post-call feedback and safety features
 
 ## Quick Start
 
@@ -27,10 +41,10 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 ### Development Testing
 
-**Test phone number:** `+1 555 555 1234`  
+**Test phone number:** `+1 555 555 1234`
 **OTP code:** `123456`
 
-> ⚠️ Only the test number above bypasses SMS. All other numbers send real SMS via Twilio.
+> Only the test number above bypasses SMS. All other numbers send real SMS via Twilio.
 
 ### Running the App
 
@@ -55,26 +69,62 @@ npm run web
 4. **Match** - When mutual interest occurs, you're prompted to schedule a call
 5. **Scheduling** - Propose call times (audio or video)
 6. **Call Lobby** - Wait for your scheduled call time
-7. **In-Call** - Simulated video/audio call with countdown timer
+7. **In-Call** - Video/audio call with countdown timer
 8. **Feedback** - Rate the call: Interested / Not Interested / Report / Block
+
+## Design System
+
+The app features a premium dark theme designed with psychological engagement principles:
+
+### Theme Philosophy
+
+- **Warm coral/rose primary colors** - Trigger attraction and emotional connection
+- **Deep dark backgrounds** - Create intimacy and focus attention
+- **Gradient accents** - Add energy and guide user actions
+- **Glass-morphism effects** - Modern, premium aesthetic
+- **Animated elements** - Keep users engaged and delighted
+- **Haptic feedback** - Reinforce every interaction with tactile response
+
+### Design Tokens
+
+Located in `src/constants/theme.ts`:
+
+```typescript
+import {
+  colors,        // Color palette with gradients
+  spacing,       // Consistent spacing scale
+  borderRadius,  // Border radius tokens
+  typography,    // Font sizes and weights
+  shadows,       // Shadow presets including glow effects
+  animation,     // Animation timing constants
+} from "../src/constants/theme";
+```
+
+### Animation Patterns
+
+- **Entrance animations** - Fade + slide for content
+- **Pulse animations** - For avatars and live indicators
+- **Floating orbs** - Decorative background elements
+- **Confetti system** - Match celebrations
+- **Sound waves** - Audio call visualization
 
 ## Project Structure
 
 ```
 no-text-dating/
 ├── app/                          # Expo Router screens
-│   ├── _layout.tsx               # Root layout
+│   ├── _layout.tsx               # Root layout with providers
 │   ├── index.tsx                 # Entry redirect (auth check)
-│   ├── auth.tsx                  # Phone auth with OTP
-│   ├── discovery.tsx             # Main swipe screen
+│   ├── auth.tsx                  # Phone auth with animated OTP flow
+│   ├── discovery.tsx             # Immersive swipe interface
 │   ├── settings.tsx              # Settings + matches list
 │   ├── profile/
-│   │   ├── edit.tsx              # Edit your profile
-│   │   └── [id].tsx              # View other profiles
+│   │   ├── edit.tsx              # Premium profile editor
+│   │   └── [id].tsx              # Full-screen profile viewer
 │   ├── match/
-│   │   └── [matchId].tsx         # Match celebration screen
+│   │   └── [matchId].tsx         # Match celebration with confetti
 │   ├── schedule/
-│   │   └── [threadId].tsx        # Schedule call times
+│   │   └── [threadId].tsx        # Call scheduling interface
 │   ├── call/
 │   │   ├── lobby/[callEventId].tsx   # Pre-call waiting room
 │   │   └── in/[callEventId].tsx      # Active call screen
@@ -86,7 +136,7 @@ no-text-dating/
 │   │   ├── index.ts              # App TypeScript types (camelCase)
 │   │   └── database.ts           # Supabase database types (snake_case)
 │   ├── services/
-│   │   ├── index.ts              # Service layer (uses Supabase)
+│   │   ├── index.ts              # Service layer exports
 │   │   ├── supabaseRepo.ts       # Supabase repository implementation
 │   │   ├── localRepo.ts          # Legacy in-memory store (unused)
 │   │   └── seedData.ts           # Demo profile data
@@ -95,7 +145,7 @@ no-text-dating/
 │   ├── store/
 │   │   └── index.ts              # Zustand global state
 │   └── constants/
-│       └── theme.ts              # Colors, spacing, typography
+│       └── theme.ts              # Design system tokens
 │
 ├── supabase/                     # Database schema reference
 │   ├── schema.sql                # Main schema with RLS policies
@@ -129,7 +179,6 @@ Defined in `src/types/database.ts` - mirrors Supabase schema for type-safe queri
 The app uses a service layer pattern with Supabase as the backend:
 
 ```typescript
-// All services are async and use Supabase
 import { AuthService, ProfilesService, MatchingService } from "./src/services";
 ```
 
@@ -151,7 +200,7 @@ The `supabaseRepo.ts` contains converters between database snake_case and app ca
 
 ## Database Schema
 
-The Supabase database schema is documented in `supabase/schema.sql` for reference:
+The Supabase database schema is documented in `supabase/schema.sql`:
 
 ### Tables
 
@@ -187,60 +236,21 @@ The duration is determined by `__DEV__` flag in `src/services/index.ts`.
 | `EXPO_PUBLIC_SUPABASE_URL`      | Your Supabase project URL     |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous/public key |
 
-## TODO Checklist
-
-### Completed
-
-- [x] Phone auth with OTP verification (Supabase Auth + Twilio)
-- [x] Persistent database (Supabase)
-- [x] Profile editing with photo picker
-- [x] Profile photo upload to Supabase Storage
-- [x] Discovery swipe interface
-- [x] Match detection and celebration
-- [x] Call scheduling with time slots
-- [x] Call lobby with countdown
-- [x] Simulated in-call experience
-- [x] Post-call feedback
-- [x] Block/Report functionality
-- [x] Row Level Security policies
-
-### Next Steps
-
-- [ ] Push notifications for matches/calls
-- [ ] Real video calling (Daily.co, Twilio Video, etc.)
-- [ ] Swipe animations (react-native-gesture-handler)
-- [ ] Background call notifications
-- [ ] Rate limiting and abuse prevention
-- [ ] International phone number support
-
-## Design System
-
-Colors, spacing, and typography are centralized in `src/constants/theme.ts`:
-
-```typescript
-import {
-  colors,
-  spacing,
-  borderRadius,
-  typography,
-} from "../src/constants/theme";
-```
-
-The app uses a dark theme with coral/rose primary colors.
-
 ## Dependencies
 
-| Package                                   | Purpose                 |
-| ----------------------------------------- | ----------------------- |
-| expo-router                               | File-based navigation   |
-| @supabase/supabase-js                     | Supabase client         |
-| zustand                                   | Global state management |
-| react-hook-form                           | Form handling           |
-| zod                                       | Schema validation       |
-| date-fns                                  | Date/time utilities     |
-| @react-native-async-storage/async-storage | Session persistence     |
-| expo-image-picker                         | Photo selection         |
-| expo-crypto                               | UUID generation         |
+| Package                                    | Purpose                     |
+| ------------------------------------------ | --------------------------- |
+| expo-router                                | File-based navigation       |
+| @supabase/supabase-js                      | Supabase client             |
+| zustand                                    | Global state management     |
+| react-hook-form                            | Form handling               |
+| zod                                        | Schema validation           |
+| date-fns                                   | Date/time utilities         |
+| @react-native-async-storage/async-storage  | Session persistence         |
+| expo-image-picker                          | Photo selection             |
+| expo-crypto                                | UUID generation             |
+| expo-linear-gradient                       | Gradient backgrounds        |
+| expo-haptics                               | Haptic feedback             |
 
 ## No Chat Policy
 
@@ -252,6 +262,10 @@ This app intentionally has **no messaging features**:
 - Only scheduled voice/video calls
 
 The goal is to encourage meaningful, real-time conversations over text-based small talk.
+
+## Market Readiness Checklist
+
+See `ROADMAP.md` for the complete product roadmap and launch checklist.
 
 ---
 
